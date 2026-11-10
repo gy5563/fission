@@ -1,6 +1,6 @@
 export default defineContentScript({
-  matches: ['*://*.google.com/*'],
+  matches: ['<all_urls>'],
   main() {
-    console.log('Hello content.');
+    // Content script — wire up note capture on pages once the spec lands.
   },
 });

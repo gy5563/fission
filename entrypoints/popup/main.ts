@@ -1,24 +1,11 @@
 import './style.css';
-import typescriptLogo from '@/assets/typescript.svg';
-import wxtLogo from '/wxt.svg';
-import { setupCounter } from '@/components/counter';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>
-    <a href="https://wxt.dev" target="_blank">
-      <img src="${wxtLogo}" class="logo" alt="WXT logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>WXT + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the WXT and TypeScript logos to learn more
-    </p>
+  <div class="flex w-80 flex-col items-center gap-4 p-6 font-sans">
+    <h1 class="text-2xl font-bold tracking-tight">Fission Notes</h1>
+    <p class="text-sm text-neutral-500">Tailwind v4 is wired up. Start building here.</p>
+    <button class="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700">
+      Get started
+    </button>
   </div>
 `;
-
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!);
