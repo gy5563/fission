@@ -1,4 +1,5 @@
 import './style.css';
+import { loadNotes } from '../../utils/notes';
 
 // The popup itself CANNOT host a Document PiP window: a PiP window never
 // outlives its opener, and a popup unloads the moment it loses focus (with no
@@ -17,14 +18,25 @@ async function openNoteWindow() {
 }
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div class="flex w-80 flex-col items-center gap-4 p-6 font-sans">
+  <div class="flex w-80 flex-col items-center gap-3 p-6 font-sans">
     <h1 class="text-2xl font-bold tracking-tight">Fission Notes</h1>
-    <p class="text-sm text-neutral-500">Scratch pad that floats above every window.</p>
+    <p class="text-sm text-neutral-500">Capture selections. Float them above every window.</p>
     <button id="open" class="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700">
       Open note window
     </button>
+    <p id="count" class="text-xs text-neutral-400"></p>
+    <p class="text-center text-xs text-neutral-500">
+      Select text on any page → right-click → <span class="font-medium">Save to Fission Notes</span><br/>
+      or press <kbd class="rounded border border-neutral-300 px-1">Alt+Shift+S</kbd>
+    </p>
     <p id="status" class="min-h-4 text-center text-xs text-neutral-500"></p>
   </div>
 `;
 
 document.getElementById('open')!.addEventListener('click', () => void openNoteWindow());
+
+void loadNotes().then((notes) => {
+  document.getElementById('count')!.textContent = notes.length
+    ? `${notes.length} note${notes.length === 1 ? '' : 's'} saved locally`
+    : 'No notes yet';
+});
