@@ -2,6 +2,7 @@ import './style.css';
 import {
   type Topic,
   type TaskNode,
+  type CheckState,
   MAX_DEPTH,
   loadTopics,
   saveTopics,
@@ -18,6 +19,9 @@ import {
   progress,
   topicProgress,
   countNodes,
+  checkState,
+  toggleDone,
+  normalizeDone,
   touch,
   toMarkdown,
   slugify,
@@ -40,6 +44,11 @@ let activeId: string | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
 let pipWin: Window | null = null;
+
+// UI-only state: which rows the user pinned open (full text). Survives re-renders.
+const expandedIds = new Set<string>();
+const INDENT = 18; // px per tier
+const CLAMP_H = 44; // 2 lines (leading-5 = 20px) + 4px vertical padding
 
 // Static markup only — all user text goes through .value / textContent.
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
@@ -130,6 +139,11 @@ function flushSave() {
   }
 }
 
+/** Bring an element into view within the scrolling tree pane (the "snap"). */
+function snapTo(el: HTMLElement) {
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
 // --- Sidebar: topics -----------------------------------------------------------
 function renderTopics() {
   topicsEl.innerHTML = '';
@@ -213,14 +227,18 @@ function renderTopics() {
 }
 
 // --- Tree ----------------------------------------------------------------------
-const cbClass = (done: boolean) =>
-  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] leading-none ' +
-  (done
+const cbClass = (s: CheckState) =>
+  'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] leading-none ' +
+  (s === 'all'
     ? 'border-green-600 bg-green-600 text-white'
-    : 'border-neutral-300 bg-white text-transparent hover:border-neutral-400');
+    : s === 'some'
+      ? 'border-amber-500 bg-amber-50 text-amber-600'
+      : 'border-neutral-300 bg-white text-transparent hover:border-neutral-400');
+
+const cbGlyph = (s: CheckState) => (s === 'all' ? '✓' : s === 'some' ? '–' : '');
 
 const textClass = (done: boolean) =>
-  'min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm outline-none hover:border-neutral-200 focus:border-neutral-400' +
+  'block w-full resize-none overflow-hidden rounded border border-transparent bg-transparent px-1 py-0.5 text-sm leading-5 outline-none hover:border-neutral-200 focus:border-neutral-400' +
   (done ? ' text-neutral-400 line-through' : '');
 
 const badgeClass = (p: { done: number; total: number }) =>
@@ -257,6 +275,7 @@ function renderTree(focusId?: string | null) {
   treeEl.innerHTML = '';
   const t = active();
   if (!t) return;
+  normalizeDone(t); // keep parent done flags consistent with cascade after any edit
 
   const addSibling = (after: TaskNode) => {
     const loc = locate(t.tasks, after.id)!;
@@ -303,41 +322,106 @@ function renderTree(focusId?: string | null) {
     for (const n of nodes) {
       const row = document.createElement('div');
       row.dataset.id = n.id;
-      row.className = 'group flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100';
-      row.style.paddingLeft = `${(depth - 1) * 18 + 4}px`;
+      row.className =
+        'group flex min-w-full items-start gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100';
+      row.style.paddingLeft = `${(depth - 1) * INDENT + 4}px`;
 
+      // Fold chevron (parents only); a same-width spacer keeps leaf rows aligned.
+      let fold: HTMLElement;
+      if (n.children.length) {
+        const b = document.createElement('button');
+        b.className =
+          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
+        b.textContent = n.collapsed ? '▸' : '▾';
+        b.title = n.collapsed ? 'Expand subtasks' : 'Collapse subtasks';
+        b.dataset.fold = n.id;
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          n.collapsed = !n.collapsed;
+          touch(t);
+          renderTree();
+          scheduleSave();
+        });
+        fold = b;
+      } else {
+        const sp = document.createElement('span');
+        sp.className = 'h-4 w-4 shrink-0';
+        fold = sp;
+      }
+
+      // Tri-state checkbox — toggles the whole subtree, then re-renders.
+      const state = checkState(n);
       const cb = document.createElement('button');
-      cb.className = cbClass(n.done);
-      cb.textContent = '✓';
-      cb.title = n.done ? 'Mark as not done' : 'Mark as done';
+      cb.className = cbClass(state);
+      cb.textContent = cbGlyph(state);
+      cb.title = n.children.length
+        ? state === 'all'
+          ? 'Uncheck all subtasks'
+          : 'Check all subtasks'
+        : n.done
+          ? 'Mark as not done'
+          : 'Mark as done';
       cb.addEventListener('click', () => {
-        n.done = !n.done;
-        touch(t);
-        cb.className = cbClass(n.done);
-        cb.title = n.done ? 'Mark as not done' : 'Mark as done';
-        input.className = textClass(n.done);
-        updateBadges();
+        toggleDone(t, n.id);
+        renderTree();
         scheduleSave();
       });
 
-      const input = document.createElement('input');
-      input.className = textClass(n.done);
-      input.value = n.text;
-      input.placeholder = depth === 1 ? 'Task…' : 'Subtask…';
-      input.addEventListener('input', () => {
-        n.text = input.value;
+      // Wrapped, auto-growing text; clamped to 2 lines unless focused/pinned open.
+      const textWrap = document.createElement('div');
+      textWrap.className = 'min-w-[220px] flex-1';
+      const ta = document.createElement('textarea');
+      ta.rows = 1;
+      ta.className = textClass(n.done);
+      ta.value = n.text;
+      ta.placeholder = depth === 1 ? 'Task…' : 'Subtask…';
+      textWrap.appendChild(ta);
+
+      const expandBtn = document.createElement('button');
+      expandBtn.className =
+        'shrink-0 self-end rounded px-1 text-[10px] leading-4 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
+      expandBtn.title = 'Expand / collapse text';
+      expandBtn.style.display = 'none';
+
+      let open = expandedIds.has(n.id);
+      const layoutText = () => {
+        ta.style.height = 'auto';
+        const full = ta.scrollHeight;
+        const overflowing = full > CLAMP_H + 1;
+        const clamped = !open && document.activeElement !== ta;
+        ta.style.height = `${clamped && overflowing ? CLAMP_H : full}px`;
+        expandBtn.style.display = overflowing ? '' : 'none';
+        expandBtn.textContent = open ? '⤡' : '⤢';
+      };
+
+      ta.addEventListener('input', () => {
+        n.text = ta.value;
         touch(t);
+        layoutText();
         scheduleSave();
       });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+      ta.addEventListener('focus', () => {
+        layoutText();
+        snapTo(ta);
+      });
+      ta.addEventListener('blur', () => layoutText());
+      expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        open = !open;
+        if (open) expandedIds.add(n.id);
+        else expandedIds.delete(n.id);
+        layoutText();
+      });
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          addSibling(n);
+          addSibling(n); // Shift+Enter inserts a newline instead
         } else if (e.key === 'Tab') {
           e.preventDefault();
           if (e.shiftKey) doOutdent(n.id);
           else doIndent(n.id);
-        } else if (e.key === 'Backspace' && input.value === '') {
+        } else if (e.key === 'Backspace' && ta.value === '') {
           e.preventDefault();
           deleteTask(n, true);
         }
@@ -348,7 +432,7 @@ function renderTree(focusId?: string | null) {
       badge.className = badgeClass(progress(n));
 
       const actions = document.createElement('span');
-      actions.className = 'flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100';
+      actions.className = 'flex shrink-0 items-center gap-0.5 self-start opacity-0 group-hover:opacity-100';
       const mkBtn = (label: string, title: string, fn: () => void) => {
         const b = document.createElement('button');
         b.className = 'rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
@@ -373,15 +457,18 @@ function renderTree(focusId?: string | null) {
       if (canOutdent(t, n.id)) mkBtn('←', 'Outdent (Shift+Tab)', () => doOutdent(n.id));
       mkBtn('×', 'Delete task', () => deleteTask(n));
 
-      row.append(cb, input, badge, actions);
+      row.append(fold, cb, textWrap, expandBtn, badge, actions);
       treeEl.appendChild(row);
-      build(n.children, depth + 1);
+      layoutText(); // measure once the textarea is in the DOM
+      if (!n.collapsed) build(n.children, depth + 1);
     }
   };
   build(t.tasks, 1);
   updateBadges();
   if (focusId) {
-    treeEl.querySelector<HTMLInputElement>(`[data-id="${focusId}"] input`)?.focus();
+    const ta = treeEl.querySelector<HTMLTextAreaElement>(`[data-id="${focusId}"] textarea`);
+    ta?.focus();
+    if (ta) snapTo(ta);
   }
 }
 
@@ -497,6 +584,7 @@ browser.storage?.onChanged.addListener((changes, areaName) => {
   const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
   if (typing && (ae.closest('#tree') || ae.id === 'topic-title')) return; // mid-keystroke
   topics = next as Topic[];
+  topics.forEach(normalizeDone);
   if (!active()) selectTopic(topics[0]?.id ?? null);
   else {
     renderTopics();
@@ -578,6 +666,7 @@ floatBtn.addEventListener('click', () => {
 // --- Init -------------------------------------------------------------------------
 void (async () => {
   topics = await loadTopics();
+  topics.forEach(normalizeDone); // migrate legacy independent flags to cascade semantics
   selectTopic(topics[0]?.id ?? null);
 })();
 
