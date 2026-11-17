@@ -16,7 +16,7 @@ export interface Topic {
   tasks: TaskNode[];
 }
 
-export const MAX_DEPTH = 3;
+export const MAX_DEPTH = 10;
 const KEY = 'topics';
 
 function area() {
@@ -126,12 +126,21 @@ export function addTask(topic: Topic, parentId: string | null, text = ''): TaskN
   return node;
 }
 
+export type IndentBlock = 'depth' | 'height' | 'sibling' | null;
+
+/** Why a node can't indent (null = it can). Mirrors the guards in canIndent. */
+export function indentBlockReason(topic: Topic, id: string): IndentBlock {
+  const loc = locate(topic.tasks, id);
+  if (!loc) return null;
+  if (loc.depth >= MAX_DEPTH) return 'depth';
+  if (loc.depth + subtreeHeight(loc.node) > MAX_DEPTH) return 'height';
+  if (loc.index === 0) return 'sibling';
+  return null;
+}
+
 /** Indent = become the last child of the previous sibling. */
 export function canIndent(topic: Topic, id: string): boolean {
-  const loc = locate(topic.tasks, id);
-  if (!loc || loc.index === 0 || loc.depth >= MAX_DEPTH) return false;
-  // After indenting, the subtree's bottom tier sits at depth + subtreeHeight.
-  return loc.depth + subtreeHeight(loc.node) <= MAX_DEPTH;
+  return !!locate(topic.tasks, id) && indentBlockReason(topic, id) === null;
 }
 
 export function indentTask(topic: Topic, id: string): boolean {

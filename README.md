@@ -2,7 +2,7 @@
 
 A Chrome extension (Manifest V3, built with [WXT](https://wxt.dev)) for **nested
 to-do lists that float on top**. Unlike a normal checklist, Fission lets you
-break every task down into more detailed tasks — up to **3 levels deep** — and
+break every task down into more detailed tasks — up to **10 levels deep** — and
 keep the whole tree in a Picture-in-Picture window while you work.
 
 ## MVP flow
@@ -18,9 +18,9 @@ keep the whole tree in a Picture-in-Picture window while you work.
 ## Features
 
 - **Topics** — rename, delete, progress at a glance (`4/9 done`)
-- **3-tier nesting** — `＋` adds a subtask; `→`/`←` buttons or `Tab` /
+- **10-tier nesting** — `＋` adds a subtask; `→`/`←` buttons or `Tab` /
   `Shift+Tab` indent/outdent. Depth *and* subtree height are enforced, so
-  nothing can exceed level 3
+  nothing can exceed level 10
 - **Independent checkboxes** — checking a parent doesn't touch its children;
   parents show a live progress badge (`2/5` — green when all descendants are
   done, amber when partial)

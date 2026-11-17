@@ -11,6 +11,7 @@ import {
   addTask,
   removeTask,
   canIndent,
+  indentBlockReason,
   indentTask,
   canOutdent,
   outdentTask,
@@ -70,7 +71,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⬇ MD</button>
           <button id="float" class="shrink-0 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">⧉ Float</button>
         </header>
-        <div id="tree-scroll" class="min-h-0 flex-1 overflow-y-auto p-3">
+        <div id="tree-scroll" class="min-h-0 flex-1 overflow-auto p-3">
           <div id="tree"></div>
           <button id="add-root"
             class="mt-1 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700">
@@ -270,9 +271,12 @@ function renderTree(focusId?: string | null) {
     if (indentTask(t, id)) {
       renderTree(id);
       scheduleSave();
-    } else {
-      setStatus(`Max ${MAX_DEPTH} levels — can’t indent further.`);
+      return;
     }
+    const reason = indentBlockReason(t, id);
+    if (reason === 'sibling') setStatus('Needs a sibling above to nest under.');
+    else if (reason === 'height') setStatus(`Too deep — this would exceed ${MAX_DEPTH} levels.`);
+    else setStatus(`Max ${MAX_DEPTH} levels — can’t indent further.`);
   };
 
   const doOutdent = (id: string) => {
@@ -300,7 +304,7 @@ function renderTree(focusId?: string | null) {
       const row = document.createElement('div');
       row.dataset.id = n.id;
       row.className = 'group flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100';
-      row.style.paddingLeft = `${(depth - 1) * 22 + 4}px`;
+      row.style.paddingLeft = `${(depth - 1) * 18 + 4}px`;
 
       const cb = document.createElement('button');
       cb.className = cbClass(n.done);
