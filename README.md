@@ -1,6 +1,6 @@
 # Fission
 
-A Chrome extension (Manifest V3, built with [WXT](https://wxt.dev)) for **nested
+Fission is a Chrome extension (Manifest V3, built with [WXT](https://wxt.dev)) for **nested
 to-do lists that float on top**. Unlike a normal checklist, Fission lets you
 break every task down into more detailed tasks — up to **10 levels deep** — and
 keep the whole tree in a Picture-in-Picture window while you work.
