@@ -1,15 +1,49 @@
-# Fission Notes
+# Fission
 
-A Chrome extension (Manifest V3, built with [WXT](https://wxt.dev)) for clipping text from any web page into a persistent, floating note window.
+A Chrome extension (Manifest V3, built with [WXT](https://wxt.dev)) for **nested
+to-do lists that float on top**. Unlike a normal checklist, Fission lets you
+break every task down into more detailed tasks — up to **3 levels deep** — and
+keep the whole tree in a Picture-in-Picture window while you work.
+
+## MVP flow
+
+1. Click the toolbar icon → **Open Fission**
+2. Create a **topic** (a project or area to break down)
+3. Build the checklist: tasks → subtasks → sub-subtasks
+4. **⧉ Float** — the topic opens in a floating [Document PiP](https://developer.chrome.com/docs/web-platform/document-picture-in-picture)
+   window that stays on top of everything; check off and edit tasks right there
+5. Export the tree with its checked states: **PDF** (visual diagram) or
+   **Markdown** (`- [x]` checklist)
 
 ## Features
 
-- **Capture from any page** — select text, then right-click → *Save to Fission Notes*, or press **Alt+Shift+S**. Each clipping becomes its own note with the source page's title and URL.
-- **Multi-note window** — a persistent browser window with a note list + editor, debounced autosave, and a *saved* indicator. Open it from the toolbar popup.
-- **Float on top** — the editor can detach into a [Document Picture-in-Picture](https://developer.chrome.com/docs/web-platform/document-picture-in-picture) window that stays above other apps while you keep browsing. Closing it docks the editor back with your text intact.
-- **Local-only storage** — everything lives in `chrome.storage.local`. No accounts, no network calls, no telemetry.
-- **Export / import** — download all notes as JSON or Markdown; import a JSON export to merge (newer `updatedAt` wins, nothing is overwritten blindly).
-- **Cross-window sync** — captures appear instantly in an open note window via `storage.onChanged`.
+- **Topics** — rename, delete, progress at a glance (`4/9 done`)
+- **3-tier nesting** — `＋` adds a subtask; `→`/`←` buttons or `Tab` /
+  `Shift+Tab` indent/outdent. Depth *and* subtree height are enforced, so
+  nothing can exceed level 3
+- **Independent checkboxes** — checking a parent doesn't touch its children;
+  parents show a live progress badge (`2/5` — green when all descendants are
+  done, amber when partial)
+- **Keyboard flow** — `Enter` adds the next sibling, `Backspace` on an empty
+  task deletes it, `Tab`/`Shift+Tab` re-nest
+- **Full editing while floating** — the PiP window hosts the same live DOM
+  (check, add, rename, re-nest); closing it docks the tree back into the board
+- **Export**
+  - **PDF** — a tidy top-down tree diagram: boxes, elbow connectors, green
+    checkmarks for done tasks, progress badges on parents, strikethrough text
+  - **Markdown** — nested `- [x]` / `- [ ]` with a progress header
+- **Local-only** — everything lives in `chrome.storage.local`; no network, no
+  telemetry, no account
+
+## Architecture
+
+| Piece | Role |
+| --- | --- |
+| `utils/tree.ts` | Topic/task model, tree ops (locate/add/indent/outdent/remove), depth rules, progress, Markdown |
+| `utils/pdf.ts` | jsPDF visual-tree renderer (tidy leaf-cursor layout, scaled to one A4 landscape page); lazy-loaded on export |
+| `entrypoints/background.ts` | Opens/focuses the single persistent board window |
+| `entrypoints/board/` | Topic sidebar + checklist tree + Document PiP host + exports |
+| `entrypoints/popup/` | Launcher (a popup can't host PiP — it unloads on focus loss) |
 
 ## Install (load unpacked)
 
@@ -18,30 +52,18 @@ pnpm install
 pnpm build
 ```
 
-Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select `.output/chrome-mv3`.
+Then in Chrome: `chrome://extensions` → enable **Developer mode** →
+**Load unpacked** → select `.output/chrome-mv3`.
 
-For development with hot reload: `pnpm dev`.
+Requires Chrome 116+ for Document Picture-in-Picture.
 
-## Usage
+## Development
 
-| Action | How |
-| --- | --- |
-| Save selected text | Right-click → *Save to Fission Notes*, or **Alt+Shift+S** |
-| Open the note window | Click the toolbar icon → *Open note window* |
-| Float the editor | *⧉ Float on top* in the note window (Chrome 116+) |
-| New / delete note | *＋ New* button / × on a list item (with confirm) |
-| Visit a note's source | Click the source link under the editor |
-| Export | *JSON* / *Markdown* buttons in the note window footer |
-| Import | *Import JSON* button — merges into existing notes |
-
-Badge feedback after a capture: **✓** saved · **–** nothing selected · **✕** page can't be captured (e.g. `chrome://` pages).
-
-The shortcut can be changed at `chrome://extensions/shortcuts`.
-
-## Notes
-
-- Notes from the earlier single-scratchpad version (`pipNote` key) are migrated automatically on first load.
-- Type-check with `pnpm compile`; if tsc complains about WXT module types, run `pnpm exec wxt prepare` first.
+```sh
+pnpm dev        # WXT dev server with HMR
+pnpm compile    # typecheck (run `pnpm exec wxt prepare` first if WXT types are missing)
+pnpm build      # production build → .output/chrome-mv3
+```
 
 ## License
 
