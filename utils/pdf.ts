@@ -1,34 +1,39 @@
-// Visual tree export: a tidy top-down diagram (boxes + elbow connectors),
-// checkmarks for done tasks, progress badges on parents. Vector PDF via jsPDF.
+// Visual tree export: a horizontal (left-to-right) tidy diagram — boxes joined by
+// smooth curved (cubic Bézier) connectors, checkmarks for done tasks, progress
+// badges on parents. Vector PDF via jsPDF.
 import { jsPDF } from 'jspdf';
 import { type Topic, type TaskNode, progress, topicProgress, slugify } from './tree';
 import { downloadBlob } from './download';
 
 const W = 156; // node box width (pt, pre-scale)
 const H = 44; // node box height
-const GX = 16; // horizontal gap between sibling subtrees
-const GY = 40; // vertical gap between tiers
+const HGAP = 56; // horizontal gap between tiers (room for the curved links)
+const VGAP = 14; // vertical gap between sibling subtrees
 
 interface Pos {
   x: number;
   y: number;
 }
 
-/** Leaf-cursor tidy layout: leaves take consecutive slots, parents center over children. */
+/**
+ * Horizontal leaf-cursor tidy layout: depth runs left→right, leaves take
+ * consecutive vertical slots, and each parent centers vertically over its children.
+ * `x`/`y` are the box's left/top edges.
+ */
 function layout(tasks: TaskNode[]): { pos: Map<string, Pos>; width: number; height: number } {
   const pos = new Map<string, Pos>();
   let cursor = 0;
   let maxDepth = 0;
   const place = (node: TaskNode, depth: number): Pos => {
     maxDepth = Math.max(maxDepth, depth);
-    const y = (depth - 1) * (H + GY);
-    let x: number;
+    const x = (depth - 1) * (W + HGAP);
+    let y: number;
     if (!node.children.length) {
-      x = cursor;
-      cursor += W + GX;
+      y = cursor;
+      cursor += H + VGAP;
     } else {
       const kids = node.children.map((c) => place(c, depth + 1));
-      x = (kids[0]!.x + kids[kids.length - 1]!.x) / 2;
+      y = (kids[0]!.y + kids[kids.length - 1]!.y) / 2;
     }
     const p = { x, y };
     pos.set(node.id, p);
@@ -37,8 +42,8 @@ function layout(tasks: TaskNode[]): { pos: Map<string, Pos>; width: number; heig
   tasks.forEach((t) => place(t, 1));
   return {
     pos,
-    width: Math.max(cursor - GX, 0),
-    height: maxDepth ? (maxDepth - 1) * (H + GY) + H : 0,
+    width: maxDepth ? (maxDepth - 1) * (W + HGAP) + W : 0,
+    height: Math.max(cursor - VGAP, 0),
   };
 }
 
@@ -95,7 +100,9 @@ export function exportTopicPdf(topic: Topic): void {
     const fs = Math.max(5.5, 9.5 * scale);
     const bfs = Math.max(5, 7.5 * scale);
 
-    // Connectors first (under the boxes): parent bottom → elbow → child top.
+    // Connectors first (under the boxes): a smooth cubic Bézier from the parent's
+    // right edge to each child's left edge — horizontal tangents at both ends, so
+    // branches flow in a gentle S-curve rather than a rigid straight elbow.
     doc.setDrawColor(190, 190, 190);
     doc.setLineWidth(Math.max(0.4, scale));
     const drawLinks = (nodes: TaskNode[]) => {
@@ -103,14 +110,24 @@ export function exportTopicPdf(topic: Topic): void {
         const a = pos.get(n.id)!;
         for (const c of n.children) {
           const b = pos.get(c.id)!;
-          const px = X(a.x + W / 2);
-          const py = Y(a.y + H);
-          const cx = X(b.x + W / 2);
-          const cy = Y(b.y);
-          const my = Y(a.y + H + GY / 2);
-          doc.line(px, py, px, my);
-          doc.line(px, my, cx, my);
-          doc.line(cx, my, cx, cy);
+          const x1 = X(a.x + W);
+          const y1 = Y(a.y + H / 2);
+          const x2 = X(b.x);
+          const y2 = Y(b.y + H / 2);
+          const mx = (x1 + x2) / 2;
+          const dy = y2 - y1;
+          // Guarantee a visible curve even when parent & child share a height:
+          // bow the control points apart so aligned links arc instead of going straight.
+          const bow = Math.abs(dy) < 1 ? S(7) : 0;
+          // one cubic leg, relative deltas: c1=(mx,y1+bow) c2=(mx,y2-bow) end=(x2,y2)
+          doc.lines(
+            [[mx - x1, bow, mx - x1, dy - bow, x2 - x1, dy]],
+            x1,
+            y1,
+            [1, 1],
+            'S',
+            false,
+          );
         }
         drawLinks(n.children);
       }

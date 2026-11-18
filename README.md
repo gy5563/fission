@@ -38,8 +38,9 @@ keep the whole tree in a Picture-in-Picture window while you work.
 - **Full editing while floating** — the PiP window hosts the same live DOM
   (check, add, rename, re-nest); closing it docks the tree back into the board
 - **Export**
-  - **PDF** — a tidy top-down tree diagram: boxes, elbow connectors, green
-    checkmarks for done tasks, progress badges on parents, strikethrough text
+  - **PDF** — a horizontal (left-to-right) tree diagram: boxes, smooth curved
+    connectors, green checkmarks for done tasks, progress badges on parents,
+    strikethrough text
   - **Markdown** — nested `- [x]` / `- [ ]` with a progress header
 - **Local-only** — everything lives in `chrome.storage.local`; no network, no
   telemetry, no account
@@ -49,7 +50,7 @@ keep the whole tree in a Picture-in-Picture window while you work.
 | Piece | Role |
 | --- | --- |
 | `utils/tree.ts` | Topic/task model, tree ops (locate/add/indent/outdent/remove), depth rules, down-only cascade, progress, Markdown |
-| `utils/pdf.ts` | jsPDF visual-tree renderer (tidy leaf-cursor layout, scaled to one A4 landscape page); lazy-loaded on export |
+| `utils/pdf.ts` | jsPDF visual-tree renderer (horizontal leaf-cursor layout, curved Bézier links, scaled to one A4 landscape page); lazy-loaded on export |
 | `entrypoints/background.ts` | Opens/focuses the single persistent board window |
 | `entrypoints/board/` | Topic sidebar + checklist tree + Document PiP host + exports |
 | `entrypoints/popup/` | Launcher (a popup can't host PiP — it unloads on focus loss) |
