@@ -26,7 +26,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </button>
     <p id="count" class="text-xs text-neutral-400"></p>
     <p class="text-center text-xs text-neutral-500">
-      3-level nested checklists · PDF / Markdown export<br/>
+      10-level nested checklists · PDF / Markdown export<br/>
       Everything stays on this device.
     </p>
     <p id="status" class="min-h-4 text-center text-xs text-neutral-500"></p>
