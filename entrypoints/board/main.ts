@@ -82,11 +82,15 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <button id="float" class="shrink-0 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">⧉ Float</button>
         </header>
         <div id="tree-scroll" class="min-h-0 flex-1 overflow-auto p-3">
-          <div id="tree"></div>
-          <button id="add-root"
-            class="mt-1 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700">
-            + Add task
-          </button>
+          <!-- Centered list column. mx-auto (not flex centering) so deep trees that
+               overflow horizontally still scroll from the left edge. -->
+          <div class="mx-auto w-full max-w-2xl">
+            <div id="tree"></div>
+            <button id="add-root"
+              class="mt-1 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700">
+              + Add task
+            </button>
+          </div>
         </div>
         <p id="status" class="px-3 pb-2 text-xs text-neutral-500"></p>
       </div>
