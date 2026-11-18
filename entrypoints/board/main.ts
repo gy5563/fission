@@ -46,6 +46,8 @@ let pipWin: Window | null = null;
 
 // UI-only state: which rows the user pinned open (full text). Survives re-renders.
 const expandedIds = new Set<string>();
+// UI-only: the task row the user is currently working in (a persistent "you are here" marker).
+let focusedTaskId: string | null = null;
 const INDENT = 18; // px per tier
 const CLAMP_H = 44; // 2 lines (leading-5 = 20px) + 4px vertical padding
 
@@ -141,6 +143,15 @@ function flushSave() {
 /** Bring an element into view within the scrolling tree pane (the "snap"). */
 function snapTo(el: HTMLElement) {
   el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+/** Highlight the active task row — a persistent "you are here" marker that
+ *  follows focus/interaction and survives re-renders and horizontal scroll. */
+function markActiveRow(id: string | null) {
+  focusedTaskId = id;
+  for (const el of treeEl.querySelectorAll<HTMLElement>('[data-id]')) {
+    el.classList.toggle('row-active', el.dataset.id === id);
+  }
 }
 
 // --- Sidebar: topics -----------------------------------------------------------
@@ -319,7 +330,8 @@ function renderTree(focusId?: string | null) {
       const row = document.createElement('div');
       row.dataset.id = n.id;
       row.className =
-        'group flex min-w-full items-start gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100';
+        'group flex min-w-full items-start gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100' +
+        (n.id === focusedTaskId ? ' row-active' : '');
       row.style.paddingLeft = `${(depth - 1) * INDENT + 4}px`;
 
       // Fold chevron (parents only); a same-width spacer keeps leaf rows aligned.
@@ -333,6 +345,7 @@ function renderTree(focusId?: string | null) {
         b.dataset.fold = n.id;
         b.addEventListener('click', (e) => {
           e.stopPropagation();
+          markActiveRow(n.id);
           n.collapsed = !n.collapsed;
           touch(t);
           renderTree();
@@ -358,6 +371,7 @@ function renderTree(focusId?: string | null) {
           ? 'Mark as not done'
           : 'Mark as done';
       cb.addEventListener('click', () => {
+        markActiveRow(n.id);
         toggleDone(t, n.id);
         renderTree();
         scheduleSave();
@@ -397,6 +411,7 @@ function renderTree(focusId?: string | null) {
         scheduleSave();
       });
       ta.addEventListener('focus', () => {
+        markActiveRow(n.id);
         layoutText();
         snapTo(ta);
       });
@@ -453,6 +468,11 @@ function renderTree(focusId?: string | null) {
       if (canOutdent(t, n.id)) mkBtn('←', 'Outdent (Shift+Tab)', () => doOutdent(n.id));
       mkBtn('×', 'Delete task', () => deleteTask(n));
 
+      // Clicking anywhere on the row (except its buttons) focuses its text → activates it.
+      row.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        ta.focus();
+      });
       row.append(fold, cb, textWrap, expandBtn, badge, actions);
       treeEl.appendChild(row);
       layoutText(); // measure once the textarea is in the DOM
@@ -503,6 +523,7 @@ function renderTopicView() {
 function selectTopic(id: string | null) {
   flushSave();
   activeId = id;
+  focusedTaskId = null;
   renderTopics();
   renderTopicView();
 }

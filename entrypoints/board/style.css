@@ -1,1 +1,9 @@
 @import 'tailwindcss';
+
+/* Active task row: a persistent "you are here" marker — a left accent bar plus a
+   soft tint. The inset shadow adds the bar without shifting layout, and the tint
+   spans the whole row so it stays visible even when the tree scrolls horizontally. */
+#tree [data-id].row-active {
+  background-color: rgb(23 23 23 / 0.06);
+  box-shadow: inset 3px 0 0 0 #171717;
+}

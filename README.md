@@ -33,6 +33,9 @@ keep the whole tree in a Picture-in-Picture window while you work.
   progress badge stays visible and the fold state is saved
 - **Deep-tree scrolling** — text keeps a readable minimum width, so wide trees
   scroll horizontally and the active row snaps into view
+- **Active-row highlight** — the task you're working in gets a left accent bar +
+  soft tint ("you are here"); it follows focus and clicks, persists after you
+  click away, and survives re-renders, horizontal scroll, and the PiP window
 - **Keyboard flow** — `Enter` adds the next sibling, `Backspace` on an empty
   task deletes it, `Tab`/`Shift+Tab` re-nest
 - **Full editing while floating** — the PiP window hosts the same live DOM
