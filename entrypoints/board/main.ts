@@ -21,7 +21,6 @@ import {
   countNodes,
   checkState,
   toggleDone,
-  normalizeDone,
   touch,
   toMarkdown,
   slugify,
@@ -231,11 +230,9 @@ const cbClass = (s: CheckState) =>
   'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] leading-none ' +
   (s === 'all'
     ? 'border-green-600 bg-green-600 text-white'
-    : s === 'some'
-      ? 'border-amber-500 bg-amber-50 text-amber-600'
-      : 'border-neutral-300 bg-white text-transparent hover:border-neutral-400');
+    : 'border-neutral-300 bg-white text-transparent hover:border-neutral-400');
 
-const cbGlyph = (s: CheckState) => (s === 'all' ? '✓' : s === 'some' ? '–' : '');
+const cbGlyph = (s: CheckState) => (s === 'all' ? '✓' : '');
 
 const textClass = (done: boolean) =>
   'block w-full resize-none overflow-hidden rounded border border-transparent bg-transparent px-1 py-0.5 text-sm leading-5 outline-none hover:border-neutral-200 focus:border-neutral-400' +
@@ -275,7 +272,6 @@ function renderTree(focusId?: string | null) {
   treeEl.innerHTML = '';
   const t = active();
   if (!t) return;
-  normalizeDone(t); // keep parent done flags consistent with cascade after any edit
 
   const addSibling = (after: TaskNode) => {
     const loc = locate(t.tasks, after.id)!;
@@ -349,7 +345,7 @@ function renderTree(focusId?: string | null) {
         fold = sp;
       }
 
-      // Tri-state checkbox — toggles the whole subtree, then re-renders.
+      // Checkbox — toggles the whole subtree (down-only); parent flag is independent of children.
       const state = checkState(n);
       const cb = document.createElement('button');
       cb.className = cbClass(state);
@@ -584,7 +580,6 @@ browser.storage?.onChanged.addListener((changes, areaName) => {
   const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
   if (typing && (ae.closest('#tree') || ae.id === 'topic-title')) return; // mid-keystroke
   topics = next as Topic[];
-  topics.forEach(normalizeDone);
   if (!active()) selectTopic(topics[0]?.id ?? null);
   else {
     renderTopics();
@@ -666,7 +661,6 @@ floatBtn.addEventListener('click', () => {
 // --- Init -------------------------------------------------------------------------
 void (async () => {
   topics = await loadTopics();
-  topics.forEach(normalizeDone); // migrate legacy independent flags to cascade semantics
   selectTopic(topics[0]?.id ?? null);
 })();
 

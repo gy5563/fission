@@ -100,49 +100,28 @@ export function topicProgress(topic: Topic): Progress {
   return tally(topic.tasks);
 }
 
-// --- Tri-state cascade checking --------------------------------------------------
-// A parent's checkbox reflects its whole subtree: ✓ all done, – some, empty none.
-// Checking/unchecking a parent cascades to every descendant; editing a child
-// re-derives its ancestors. `done` on a parent always means "subtree complete".
-export type CheckState = 'all' | 'some' | 'none';
+// --- Cascade checking (down-only) ------------------------------------------------
+// Checking/unchecking a PARENT cascades to every descendant. Checking a CHILD
+// affects only that child — ancestors keep their own independent `done` flag.
+// A parent's checkbox shows its own flag (✓ done / empty not done); the progress
+// badge separately reports how many descendants are done.
+export type CheckState = 'all' | 'none';
 
+/** A node's own checkbox state, independent of its children. */
 export function checkState(n: TaskNode): CheckState {
-  if (!n.children.length) return n.done ? 'all' : 'none';
-  const p = progress(n);
-  if (p.total > 0 && p.done === p.total) return 'all';
-  return p.done > 0 ? 'some' : 'none';
+  return n.done ? 'all' : 'none';
 }
 /** Set done on a node and every descendant (cascade down). */
 export function setSubtreeDone(n: TaskNode, done: boolean): void {
   n.done = done;
   for (const c of n.children) setSubtreeDone(c, done);
 }
-/** Recompute ancestors' done = all their children done (cascade up). */
-export function syncAncestors(topic: Topic, id: string): void {
-  let loc = locate(topic.tasks, id);
-  while (loc?.parent) {
-    const par = loc.parent;
-    par.done = par.children.length > 0 && par.children.every((c) => c.done);
-    loc = locate(topic.tasks, par.id);
-  }
-}
-/** Toggle a node: check/uncheck its whole subtree, then sync ancestors. */
+/** Toggle a node and its whole subtree; ancestors are left untouched. */
 export function toggleDone(topic: Topic, id: string): void {
   const loc = locate(topic.tasks, id);
   if (!loc) return;
-  setSubtreeDone(loc.node, checkState(loc.node) !== 'all');
-  syncAncestors(topic, id);
+  setSubtreeDone(loc.node, !loc.node.done);
   touch(topic);
-}
-/** Normalize parent done flags to cascade semantics (bottom-up). Idempotent. */
-export function normalizeDone(topic: Topic): void {
-  const sync = (n: TaskNode): boolean => {
-    if (!n.children.length) return n.done;
-    const all = n.children.map(sync).every(Boolean);
-    n.done = all;
-    return all;
-  };
-  topic.tasks.forEach(sync);
 }
 
 export function touch(topic: Topic): void {

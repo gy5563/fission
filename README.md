@@ -21,10 +21,11 @@ keep the whole tree in a Picture-in-Picture window while you work.
 - **10-tier nesting** — `＋` adds a subtask; `→`/`←` buttons or `Tab` /
   `Shift+Tab` indent/outdent. Depth *and* subtree height are enforced, so
   nothing can exceed level 10
-- **Cascade checking (tri-state)** — checking a task checks its whole subtree;
-  unchecking clears it. Parents mirror their descendants: ✓ all done, – partial,
-  empty none, plus a live progress badge (`2/5` — green when all descendants are
-  done, amber when partial)
+- **Cascade checking (down-only)** — checking or unchecking a parent applies to
+  its whole subtree; checking a child affects only that child and never changes
+  its parent. Each checkbox shows the task's own state (✓ done / empty), plus a
+  live progress badge (`2/5` — green when all descendants are done, amber when
+  partial)
 - **Wrapped, expandable text** — task text wraps and auto-grows; long tasks clamp
   to two lines with a `⤢` toggle (and auto-expand while focused) so the full list
   stays scannable. `Shift+Enter` inserts a newline
@@ -47,7 +48,7 @@ keep the whole tree in a Picture-in-Picture window while you work.
 
 | Piece | Role |
 | --- | --- |
-| `utils/tree.ts` | Topic/task model, tree ops (locate/add/indent/outdent/remove), depth rules, tri-state cascade, progress, Markdown |
+| `utils/tree.ts` | Topic/task model, tree ops (locate/add/indent/outdent/remove), depth rules, down-only cascade, progress, Markdown |
 | `utils/pdf.ts` | jsPDF visual-tree renderer (tidy leaf-cursor layout, scaled to one A4 landscape page); lazy-loaded on export |
 | `entrypoints/background.ts` | Opens/focuses the single persistent board window |
 | `entrypoints/board/` | Topic sidebar + checklist tree + Document PiP host + exports |
