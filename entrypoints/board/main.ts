@@ -48,6 +48,8 @@ let pipWin: Window | null = null;
 const expandedIds = new Set<string>();
 // UI-only: the task row the user is currently working in (a persistent "you are here" marker).
 let focusedTaskId: string | null = null;
+// UI-only: spotlight mode — fade every row outside the active task's branch.
+let spotlightOn = false;
 const INDENT = 18; // px per tier
 const CLAMP_H = 44; // 2 lines (leading-5 = 20px) + 4px vertical padding
 
@@ -79,18 +81,16 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⬇ PDF</button>
           <button id="export-md" title="Export as a Markdown checklist"
             class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⬇ MD</button>
+          <button id="spotlight" title="Spotlight mode — fade everything except the current task" aria-pressed="false"
+            class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">◐ Spotlight</button>
           <button id="float" class="shrink-0 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">⧉ Float</button>
         </header>
         <div id="tree-scroll" class="min-h-0 flex-1 overflow-auto p-3">
-          <!-- Centered list column. mx-auto (not flex centering) so deep trees that
-               overflow horizontally still scroll from the left edge. -->
-          <div class="mx-auto w-full max-w-2xl">
-            <div id="tree"></div>
-            <button id="add-root"
-              class="mt-1 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700">
-              + Add task
-            </button>
-          </div>
+          <div id="tree"></div>
+          <button id="add-root"
+            class="mt-1 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700">
+            + Add task
+          </button>
         </div>
         <p id="status" class="px-3 pb-2 text-xs text-neutral-500"></p>
       </div>
@@ -108,6 +108,7 @@ const progressEl = document.getElementById('topic-progress')!;
 const savedEl = document.getElementById('saved')!;
 const statusEl = document.getElementById('status')!;
 const floatBtn = document.getElementById('float') as HTMLButtonElement;
+const spotlightBtn = document.getElementById('spotlight') as HTMLButtonElement;
 
 function active(): Topic | undefined {
   return topics.find((t) => t.id === activeId);
@@ -156,6 +157,25 @@ function markActiveRow(id: string | null) {
   for (const el of treeEl.querySelectorAll<HTMLElement>('[data-id]')) {
     el.classList.toggle('row-active', el.dataset.id === id);
   }
+  applySpotlight();
+}
+
+/** Spotlight: keep only the active task at full strength; fade every other row
+ *  (no-op when spotlight is off or nothing is focused). */
+function applySpotlight() {
+  const target = spotlightOn ? focusedTaskId : null;
+  for (const el of treeEl.querySelectorAll<HTMLElement>('[data-id]')) {
+    el.classList.toggle('row-dim', target !== null && el.dataset.id !== target);
+  }
+}
+
+function updateSpotlightBtn() {
+  spotlightBtn.className =
+    'shrink-0 rounded border px-2 py-1 text-[10px] ' +
+    (spotlightOn
+      ? 'border-neutral-900 bg-neutral-900 text-white'
+      : 'border-neutral-200 text-neutral-500 hover:bg-neutral-100');
+  spotlightBtn.setAttribute('aria-pressed', String(spotlightOn));
 }
 
 // --- Sidebar: topics -----------------------------------------------------------
@@ -242,7 +262,7 @@ function renderTopics() {
 
 // --- Tree ----------------------------------------------------------------------
 const cbClass = (s: CheckState) =>
-  'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] leading-none ' +
+  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] leading-none ' +
   (s === 'all'
     ? 'border-green-600 bg-green-600 text-white'
     : 'border-neutral-300 bg-white text-transparent hover:border-neutral-400');
@@ -334,7 +354,7 @@ function renderTree(focusId?: string | null) {
       const row = document.createElement('div');
       row.dataset.id = n.id;
       row.className =
-        'group flex min-w-full items-start gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100' +
+        'group flex min-w-full items-center gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100' +
         (n.id === focusedTaskId ? ' row-active' : '');
       row.style.paddingLeft = `${(depth - 1) * INDENT + 4}px`;
 
@@ -343,7 +363,7 @@ function renderTree(focusId?: string | null) {
       if (n.children.length) {
         const b = document.createElement('button');
         b.className =
-          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
+          'flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
         b.textContent = n.collapsed ? '▸' : '▾';
         b.title = n.collapsed ? 'Expand subtasks' : 'Collapse subtasks';
         b.dataset.fold = n.id;
@@ -393,7 +413,7 @@ function renderTree(focusId?: string | null) {
 
       const expandBtn = document.createElement('button');
       expandBtn.className =
-        'shrink-0 self-end rounded px-1 text-[10px] leading-4 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
+        'shrink-0 rounded px-1 text-[10px] leading-4 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
       expandBtn.title = 'Expand / collapse text';
       expandBtn.style.display = 'none';
 
@@ -447,7 +467,7 @@ function renderTree(focusId?: string | null) {
       badge.className = badgeClass(progress(n));
 
       const actions = document.createElement('span');
-      actions.className = 'flex shrink-0 items-center gap-0.5 self-start opacity-0 group-hover:opacity-100';
+      actions.className = 'flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100';
       const mkBtn = (label: string, title: string, fn: () => void) => {
         const b = document.createElement('button');
         b.className = 'rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
@@ -485,6 +505,7 @@ function renderTree(focusId?: string | null) {
   };
   build(t.tasks, 1);
   updateBadges();
+  applySpotlight();
   if (focusId) {
     const ta = treeEl.querySelector<HTMLTextAreaElement>(`[data-id="${focusId}"] textarea`);
     ta?.focus();
@@ -511,7 +532,6 @@ function renderTopicView() {
   empty.classList.add('hidden');
   empty.classList.remove('flex');
   titleInput.value = t.title;
-  renderTree();
   if (floating) {
     ph.classList.remove('hidden');
     ph.classList.add('flex');
@@ -522,6 +542,9 @@ function renderTopicView() {
     view.classList.remove('hidden');
     view.classList.add('flex');
   }
+  // Render AFTER the view is visible: textarea auto-height reads scrollHeight, which
+  // is 0 while display:none — measuring hidden would collapse every row to 0px.
+  renderTree();
 }
 
 function selectTopic(id: string | null) {
@@ -569,6 +592,15 @@ document.getElementById('add-root')!.addEventListener('click', () => {
     renderTree(node.id);
     scheduleSave();
   }
+});
+
+// --- Spotlight mode --------------------------------------------------------------
+spotlightBtn.addEventListener('click', () => {
+  spotlightOn = !spotlightOn;
+  void browser.storage?.local.set({ spotlight: spotlightOn });
+  updateSpotlightBtn();
+  applySpotlight();
+  setStatus(spotlightOn ? 'Spotlight on — focus a task to light up its branch' : 'Spotlight off');
 });
 
 // --- Export ---------------------------------------------------------------------
@@ -685,6 +717,9 @@ floatBtn.addEventListener('click', () => {
 
 // --- Init -------------------------------------------------------------------------
 void (async () => {
+  const pref = await browser.storage?.local.get('spotlight');
+  spotlightOn = !!pref?.spotlight;
+  updateSpotlightBtn();
   topics = await loadTopics();
   selectTopic(topics[0]?.id ?? null);
 })();
