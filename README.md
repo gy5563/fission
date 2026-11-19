@@ -33,7 +33,10 @@ keep the whole tree in a Picture-in-Picture window while you work.
   progress badge stays visible and the fold state is saved
 - **Deep-tree scrolling** — text keeps a readable minimum width, so wide trees
   scroll horizontally and the active row snaps into view
-- **Active-row highlight** — the task you're working in gets a soft green tint
+- **Click-safe editing** — task text is read-only until you hit the row's `✎`
+  button (new tasks open ready to type), so stray clicks select a task but
+  can't change it
+- **Active-row highlight** — the task you're working in gets a soft green tint + border
   ("you are here"); it follows focus and clicks, persists after you click away,
   and survives re-renders, horizontal scroll, and the PiP window
 - **Per-task timers** — focus a task, hit `⏱ Timer`, pick a preset

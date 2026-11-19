@@ -458,6 +458,7 @@ function renderTree(focusId?: string | null) {
       ta.className = textClass(n.done);
       ta.value = n.text;
       ta.placeholder = depth === 1 ? 'Task…' : 'Subtask…';
+      ta.readOnly = true; // click-safe: editing starts via the ✎ button or task creation
       textWrap.appendChild(ta);
 
       const expandBtn = document.createElement('button');
@@ -488,7 +489,10 @@ function renderTree(focusId?: string | null) {
         layoutText();
         snapTo(ta);
       });
-      ta.addEventListener('blur', () => layoutText());
+      ta.addEventListener('blur', () => {
+        ta.readOnly = true;
+        layoutText();
+      });
       expandBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -498,6 +502,7 @@ function renderTree(focusId?: string | null) {
         layoutText();
       });
       ta.addEventListener('keydown', (e) => {
+        if (ta.readOnly) return; // no accidental mutations from a stray focus
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           addSibling(n); // Shift+Enter inserts a newline instead
@@ -549,7 +554,13 @@ function renderTree(focusId?: string | null) {
           fn();
         });
         actions.appendChild(b);
+        return b;
       };
+      const editBtn = mkBtn('✎', 'Edit task', () => {
+        ta.readOnly = false;
+        ta.focus();
+      });
+      editBtn.dataset.edit = n.id;
       if (depth < MAX_DEPTH) {
         mkBtn('＋', 'Add subtask', () => {
           const node = addTask(t, n.id);
@@ -580,8 +591,13 @@ function renderTree(focusId?: string | null) {
     const ta = treeEl.querySelector<HTMLTextAreaElement>(
       `[data-id="${CSS.escape(focusId)}"] textarea`,
     );
-    ta?.focus();
-    if (ta) snapTo(ta);
+    if (ta) {
+      // focusId only follows explicit actions (create/indent/outdent/delete),
+      // so the target starts editable; stray clicks never reach this path.
+      ta.readOnly = false;
+      ta.focus();
+      snapTo(ta);
+    }
   }
 }
 
