@@ -24,15 +24,74 @@ function area() {
   return browser.storage?.local;
 }
 
+// Storage is private to this extension, but treat it as untrusted anyway:
+// corruption, manual devtools edits, or a future migration bug must not crash
+// the board. Coerce types, regenerate bad/duplicate ids, and clamp nesting to
+// MAX_DEPTH. Iterative walk so a depth bomb in stored JSON can't overflow the
+// stack (the recursive helpers below assume sanitized input).
+const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+export function sanitizeTopics(v: unknown): Topic[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  const fixId = (id: unknown): string => {
+    let s = typeof id === 'string' && ID_RE.test(id) ? id : uid();
+    while (seen.has(s)) s = uid();
+    seen.add(s);
+    return s;
+  };
+  const out: Topic[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Record<string, unknown>;
+    const tasks: TaskNode[] = [];
+    const stack: Array<{ src: unknown; dest: TaskNode[]; depth: number }> = [
+      { src: r.tasks, dest: tasks, depth: 1 },
+    ];
+    while (stack.length) {
+      const { src, dest, depth } = stack.pop()!;
+      if (!Array.isArray(src) || depth > MAX_DEPTH) continue;
+      for (const item of src) {
+        if (!item || typeof item !== 'object') continue;
+        const n = item as Record<string, unknown>;
+        const node: TaskNode = {
+          id: fixId(n.id),
+          text: typeof n.text === 'string' ? n.text : '',
+          done: n.done === true,
+          children: [],
+        };
+        if (n.collapsed === true) node.collapsed = true;
+        dest.push(node);
+        if (Array.isArray(n.children) && n.children.length && depth < MAX_DEPTH) {
+          stack.push({ src: n.children, dest: node.children, depth: depth + 1 });
+        }
+      }
+    }
+    const now = Date.now();
+    const num = (x: unknown): number =>
+      typeof x === 'number' && Number.isFinite(x) ? x : now;
+    out.push({
+      id: fixId(r.id),
+      title: typeof r.title === 'string' ? r.title : 'Untitled topic',
+      createdAt: num(r.createdAt),
+      updatedAt: num(r.updatedAt),
+      tasks,
+    });
+  }
+  return out;
+}
+
 export async function loadTopics(): Promise<Topic[]> {
   const a = area();
   if (!a) return [];
   const got = await a.get(KEY);
-  const v = got[KEY];
-  return Array.isArray(v) ? (v as Topic[]) : [];
+  return sanitizeTopics(got[KEY]);
 }
 export async function saveTopics(topics: Topic[]): Promise<void> {
-  await area()?.set({ [KEY]: topics });
+  const a = area();
+  // Fail loudly rather than resolving without writing — callers flash "saved"
+  // on success, which must never appear when nothing was persisted.
+  if (!a) throw new Error('Extension storage is unavailable.');
+  await a.set({ [KEY]: topics });
 }
 
 export const uid = (): string => crypto.randomUUID();

@@ -5,6 +5,7 @@ import {
   type CheckState,
   MAX_DEPTH,
   loadTopics,
+  sanitizeTopics,
   saveTopics,
   newTopic,
   newNode,
@@ -40,9 +41,37 @@ interface DocPip {
 
 let topics: Topic[] = [];
 let activeId: string | null = null;
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let savedFlashTimer: ReturnType<typeof setTimeout> | undefined;
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
+// Canonical-JSON snapshots of our own recent writes, so storage.onChanged can
+// skip self-echoes — applying them would re-render mid-keystroke (and steal
+// focus while editing in PiP, where the opener's activeElement is not the
+// textarea). Refcounted: two consecutive writes can serialize identically
+// (same-millisecond touch), and each still gets its own echo to consume.
+const recentSaves = new Map<string, number>();
+function consumeSnap(snap: string) {
+  const n = recentSaves.get(snap);
+  if (n === undefined) return;
+  if (n <= 1) recentSaves.delete(snap);
+  else recentSaves.set(snap, n - 1);
+}
+// chrome.storage canonicalizes object keys (sorted) on the way back out, so
+// raw JSON.stringify of our in-memory state never matches the echo. Compare
+// sorted-key serializations instead, or every self-echo looks like an external
+// write and re-renders mid-typing (stealing focus in the PiP window).
+function canonicalJson(v: unknown): string {
+  return JSON.stringify(v, (_k, val: unknown) => {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const o = val as Record<string, unknown>;
+      const sorted: Record<string, unknown> = {};
+      for (const k of Object.keys(o).sort()) sorted[k] = o[k];
+      return sorted;
+    }
+    return val;
+  });
+}
 let pipWin: Window | null = null;
+let restoreDock: (() => void) | null = null;
 
 // UI-only state: which rows the user pinned open (full text). Survives re-renders.
 const expandedIds = new Set<string>();
@@ -124,25 +153,26 @@ function setStatus(msg: string) {
 
 function flashSaved() {
   savedEl.textContent = 'saved';
-  setTimeout(() => {
+  clearTimeout(savedFlashTimer);
+  savedFlashTimer = setTimeout(() => {
     savedEl.textContent = '';
   }, 1500);
 }
 
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveTimer = undefined;
-    void saveTopics(topics).then(flashSaved);
-  }, 400);
-}
-
-function flushSave() {
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-    saveTimer = undefined;
-    void saveTopics(topics);
-  }
+// Write-through persistence: every mutation is saved immediately. A debounced
+// save kept edits in memory until the timer fired, and close-time flushes are
+// unreliable — the renderer can be torn down before the async write lands
+// (and may not fire pagehide/visibilitychange at all), so closing the window
+// right after typing lost the last edits.
+function save() {
+  const snap = canonicalJson(topics);
+  recentSaves.set(snap, (recentSaves.get(snap) ?? 0) + 1);
+  void saveTopics(topics)
+    .then(flashSaved)
+    .catch(() => {
+      consumeSnap(snap);
+      setStatus('Save failed — device storage may be full.');
+    });
 }
 
 /** Bring an element into view within the scrolling tree pane (the "snap"). */
@@ -222,7 +252,7 @@ function renderTopics() {
       const commit = () => {
         t.title = input.value.trim() || 'Untitled topic';
         touch(t);
-        void saveTopics(topics);
+        save();
         renderTopics();
         if (activeId === t.id) {
           titleInput.value = t.title;
@@ -249,7 +279,7 @@ function renderTopics() {
       const n = countNodes(t.tasks);
       if (!confirm(`Delete topic “${t.title}”${n ? ` and its ${n} task${n === 1 ? '' : 's'}` : ''}?`)) return;
       topics = topics.filter((x) => x.id !== t.id);
-      void saveTopics(topics);
+      save();
       if (activeId === t.id) selectTopic(topics[0]?.id ?? null);
       else renderTopics();
     });
@@ -314,13 +344,13 @@ function renderTree(focusId?: string | null) {
     loc.list.splice(loc.index + 1, 0, node);
     touch(t);
     renderTree(node.id);
-    scheduleSave();
+    save();
   };
 
   const doIndent = (id: string) => {
     if (indentTask(t, id)) {
       renderTree(id);
-      scheduleSave();
+      save();
       return;
     }
     const reason = indentBlockReason(t, id);
@@ -332,7 +362,7 @@ function renderTree(focusId?: string | null) {
   const doOutdent = (id: string) => {
     if (outdentTask(t, id)) {
       renderTree(id);
-      scheduleSave();
+      save();
     }
   };
 
@@ -346,7 +376,7 @@ function renderTree(focusId?: string | null) {
     removeTask(t, n.id);
     renderTree(focusId);
     renderTopics();
-    scheduleSave();
+    save();
   };
 
   const build = (nodes: TaskNode[], depth: number) => {
@@ -373,7 +403,7 @@ function renderTree(focusId?: string | null) {
           n.collapsed = !n.collapsed;
           touch(t);
           renderTree();
-          scheduleSave();
+          save();
         });
         fold = b;
       } else {
@@ -398,7 +428,7 @@ function renderTree(focusId?: string | null) {
         markActiveRow(n.id);
         toggleDone(t, n.id);
         renderTree();
-        scheduleSave();
+        save();
       });
 
       // Wrapped, auto-growing text; clamped to 2 lines unless focused/pinned open.
@@ -432,7 +462,7 @@ function renderTree(focusId?: string | null) {
         n.text = ta.value;
         touch(t);
         layoutText();
-        scheduleSave();
+        save();
       });
       ta.addEventListener('focus', () => {
         markActiveRow(n.id);
@@ -484,7 +514,7 @@ function renderTree(focusId?: string | null) {
           const node = addTask(t, n.id);
           if (node) {
             renderTree(node.id);
-            scheduleSave();
+            save();
           }
         });
       }
@@ -507,7 +537,9 @@ function renderTree(focusId?: string | null) {
   updateBadges();
   applySpotlight();
   if (focusId) {
-    const ta = treeEl.querySelector<HTMLTextAreaElement>(`[data-id="${focusId}"] textarea`);
+    const ta = treeEl.querySelector<HTMLTextAreaElement>(
+      `[data-id="${CSS.escape(focusId)}"] textarea`,
+    );
     ta?.focus();
     if (ta) snapTo(ta);
   }
@@ -548,7 +580,6 @@ function renderTopicView() {
 }
 
 function selectTopic(id: string | null) {
-  flushSave();
   activeId = id;
   focusedTaskId = null;
   renderTopics();
@@ -557,10 +588,9 @@ function selectTopic(id: string | null) {
 
 // --- Topic-level controls -------------------------------------------------------
 document.getElementById('new-topic')!.addEventListener('click', () => {
-  flushSave();
   const t = newTopic(`Topic ${topics.length + 1}`);
   topics.unshift(t);
-  void saveTopics(topics);
+  save();
   selectTopic(t.id);
   titleInput.focus();
   titleInput.select();
@@ -571,7 +601,7 @@ titleInput.addEventListener('input', () => {
   if (!t) return;
   t.title = titleInput.value;
   touch(t);
-  scheduleSave();
+  save();
 });
 titleInput.addEventListener('change', () => {
   const t = active();
@@ -581,7 +611,7 @@ titleInput.addEventListener('change', () => {
   touch(t);
   renderTopics();
   if (pipWin && !pipWin.closed) pipWin.document.title = `Fission — ${t.title}`;
-  scheduleSave();
+  save();
 });
 
 document.getElementById('add-root')!.addEventListener('click', () => {
@@ -590,7 +620,7 @@ document.getElementById('add-root')!.addEventListener('click', () => {
   const node = addTask(t, null);
   if (node) {
     renderTree(node.id);
-    scheduleSave();
+    save();
   }
 });
 
@@ -608,7 +638,6 @@ document.getElementById('export-pdf')!.addEventListener('click', async () => {
   const t = active();
   if (!t) return;
   if (countNodes(t.tasks) === 0) { setStatus('Add some tasks first'); return; }
-  flushSave();
   try {
     // Lazy-load jsPDF so the board's initial bundle stays small.
     const { exportTopicPdf } = await import('../../utils/pdf');
@@ -622,7 +651,6 @@ document.getElementById('export-md')!.addEventListener('click', () => {
   const t = active();
   if (!t) return;
   if (countNodes(t.tasks) === 0) { setStatus('Add some tasks first'); return; }
-  flushSave();
   const date = new Date().toISOString().slice(0, 10);
   downloadText(`fission-${slugify(t.title)}-${date}.md`, toMarkdown(t), 'text/markdown');
   setStatus('Markdown exported ✓');
@@ -633,10 +661,15 @@ browser.storage?.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local' || !changes.topics) return;
   const next = changes.topics.newValue;
   if (!Array.isArray(next)) return;
+  const snap = canonicalJson(next);
+  if (recentSaves.has(snap)) {
+    consumeSnap(snap); // our own write — state is already current
+    return;
+  }
   const ae = document.activeElement;
   const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
   if (typing && (ae.closest('#tree') || ae.id === 'topic-title')) return; // mid-keystroke
-  topics = next as Topic[];
+  topics = sanitizeTopics(next);
   if (!active()) selectTopic(topics[0]?.id ?? null);
   else {
     renderTopics();
@@ -667,6 +700,9 @@ function mirrorStyles(target: Document) {
 async function floatIntoPip() {
   const t = active();
   if (!t) return;
+  // A previous PiP may have died without firing pagehide (abrupt teardown);
+  // recover the mount before trying to float again.
+  if (pipWin?.closed) restoreDock?.();
   const dpi = (window as Window & { documentPictureInPicture?: DocPip }).documentPictureInPicture;
   if (!dpi) {
     setStatus('Document PiP not supported here (Chrome 116+).');
@@ -696,7 +732,8 @@ async function floatIntoPip() {
     ph.classList.add('flex');
     floatBtn.textContent = '⧉ Dock';
     setStatus('floating ✓ — close the PiP window to dock it back');
-    win.addEventListener('pagehide', () => {
+    const dockBack = () => {
+      if (!pipWin) return; // already docked — pagehide and explicit Dock can both run
       pipWin = null;
       originalParent.append(mount);
       ph.classList.add('hidden');
@@ -704,15 +741,22 @@ async function floatIntoPip() {
       floatBtn.textContent = '⧉ Float';
       statusEl.textContent = '';
       renderTopicView();
-    });
+    };
+    restoreDock = dockBack;
+    win.addEventListener('pagehide', dockBack);
   } catch (err) {
     setStatus(`Failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 floatBtn.addEventListener('click', () => {
-  if (pipWin && !pipWin.closed) pipWin.close();
-  else void floatIntoPip();
+  if (pipWin && !pipWin.closed) {
+    pipWin.close();
+    // Restore synchronously — pagehide may never fire on abrupt teardown.
+    restoreDock?.();
+  } else {
+    void floatIntoPip();
+  }
 });
 
 // --- Init -------------------------------------------------------------------------
@@ -723,5 +767,3 @@ void (async () => {
   topics = await loadTopics();
   selectTopic(topics[0]?.id ?? null);
 })();
-
-window.addEventListener('pagehide', flushSave);

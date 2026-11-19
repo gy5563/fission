@@ -21,7 +21,10 @@ export default defineBackground(() => {
     return w?.id;
   }
 
-  browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // Defense-in-depth: only this extension's own pages may drive the worker.
+    // (Without externally_connectable, web pages can't message us anyway.)
+    if (sender.id !== browser.runtime.id) return;
     if (msg?.type === 'open-board-window') {
       void openBoardWindow().then((windowId) => sendResponse({ ok: true, windowId }));
       return true; // keep the message channel open for the async reply
