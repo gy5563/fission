@@ -102,7 +102,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         Create a topic to start breaking things down.
       </div>
       <div id="topic-view" class="hidden min-h-0 flex-1 flex-col">
-        <header class="flex items-center gap-2 border-b border-neutral-200 px-3 py-2">
+        <header class="relative flex items-center gap-2 border-b border-neutral-200 px-3 py-2">
           <input id="topic-title" title="Rename topic"
             class="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-neutral-200 focus:border-neutral-400" />
           <span id="topic-progress" class="shrink-0 text-xs text-neutral-500"></span>
@@ -112,6 +112,24 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⬇ MD</button>
           <button id="spotlight" title="Spotlight mode — fade everything except the current task" aria-pressed="false"
             class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">◐ Spotlight</button>
+          <button id="timer" title="Set a countdown timer for the current task"
+            class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⏱ Timer</button>
+          <div id="timer-pop"
+            class="absolute right-0 top-full z-10 mt-1 hidden w-56 rounded border border-neutral-200 bg-white p-2 shadow-md">
+            <div class="flex gap-1">
+              <button data-timer-preset="5" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">5 min</button>
+              <button data-timer-preset="15" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">15 min</button>
+              <button data-timer-preset="25" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">25 min</button>
+              <button data-timer-preset="45" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">45 min</button>
+            </div>
+            <div class="mt-2 flex items-center gap-1">
+              <input id="timer-custom" type="number" min="0.1" max="1440" step="0.1" value="25" title="Custom minutes"
+                class="w-16 rounded border border-neutral-300 px-1 py-0.5 text-xs outline-none focus:border-neutral-400" />
+              <span class="text-[10px] text-neutral-400">min</span>
+              <button id="timer-start" class="ml-auto rounded bg-neutral-900 px-2 py-1 text-[10px] font-medium text-white hover:bg-neutral-700">Start</button>
+            </div>
+            <button id="timer-cancel" class="mt-2 hidden w-full rounded border border-neutral-200 px-2 py-1 text-[10px] text-red-500 hover:bg-neutral-100">Cancel timer</button>
+          </div>
           <button id="float" class="shrink-0 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">⧉ Float</button>
         </header>
         <div id="tree-scroll" class="min-h-0 flex-1 overflow-auto p-3">
@@ -138,6 +156,11 @@ const savedEl = document.getElementById('saved')!;
 const statusEl = document.getElementById('status')!;
 const floatBtn = document.getElementById('float') as HTMLButtonElement;
 const spotlightBtn = document.getElementById('spotlight') as HTMLButtonElement;
+const timerBtn = document.getElementById('timer') as HTMLButtonElement;
+const timerPop = document.getElementById('timer-pop')!;
+const timerCustom = document.getElementById('timer-custom') as HTMLInputElement;
+const timerStartBtn = document.getElementById('timer-start') as HTMLButtonElement;
+const timerCancelBtn = document.getElementById('timer-cancel') as HTMLButtonElement;
 
 function active(): Topic | undefined {
   return topics.find((t) => t.id === activeId);
@@ -496,6 +519,28 @@ function renderTree(focusId?: string | null) {
       badge.dataset.badge = n.id;
       badge.className = badgeClass(progress(n));
 
+      // Countdown chip; the 1s tick updates its text in place (no re-render).
+      let timerChip: HTMLElement | null = null;
+      if (n.timer) {
+        const done = n.timer.endsAt <= Date.now();
+        const chip = document.createElement('span');
+        chip.dataset.timerId = n.id;
+        chip.dataset.ends = String(n.timer.endsAt);
+        chip.dataset.state = done ? 'done' : 'running';
+        chip.className =
+          'shrink-0 cursor-pointer rounded border border-neutral-200 px-1 text-[10px] tabular-nums text-neutral-500' +
+          (done ? ' timer-done' : '');
+        chip.textContent = done ? '⏰ time’s up' : `⏱ ${fmtRemaining(n.timer.endsAt)}`;
+        chip.title = 'Timer — click to change or cancel';
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          markActiveRow(n.id);
+          openTimerPop(n.id);
+        });
+        if (done) row.classList.add('row-timer-done');
+        timerChip = chip;
+      }
+
       const actions = document.createElement('span');
       actions.className = 'flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100';
       const mkBtn = (label: string, title: string, fn: () => void) => {
@@ -527,7 +572,7 @@ function renderTree(focusId?: string | null) {
         if ((e.target as HTMLElement).closest('button')) return;
         ta.focus();
       });
-      row.append(fold, cb, textWrap, expandBtn, badge, actions);
+      row.append(fold, cb, textWrap, expandBtn, badge, ...(timerChip ? [timerChip] : []), actions);
       treeEl.appendChild(row);
       layoutText(); // measure once the textarea is in the DOM
       if (!n.collapsed) build(n.children, depth + 1);
@@ -632,6 +677,95 @@ spotlightBtn.addEventListener('click', () => {
   applySpotlight();
   setStatus(spotlightOn ? 'Spotlight on — focus a task to light up its branch' : 'Spotlight off');
 });
+
+// --- Countdown timer --------------------------------------------------------------
+// UI-only: which task the open popover targets.
+let timerTargetId: string | null = null;
+
+/** mm:ss remaining (h:mm:ss past an hour), floored at zero. */
+function fmtRemaining(endsAt: number): string {
+  const s = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+  const h = Math.floor(s / 3600);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function closeTimerPop() {
+  timerPop.classList.add('hidden');
+  timerTargetId = null;
+}
+
+function openTimerPop(id: string) {
+  const t = active();
+  const loc = t && locate(t.tasks, id);
+  if (!loc) return;
+  timerTargetId = id;
+  timerCustom.value = '25';
+  timerCancelBtn.classList.toggle('hidden', !loc.node.timer);
+  timerPop.classList.remove('hidden');
+}
+
+function startTimer(minutes: number) {
+  const t = active();
+  const loc = t && timerTargetId !== null && locate(t.tasks, timerTargetId);
+  if (!t || !loc) {
+    closeTimerPop();
+    return;
+  }
+  if (!Number.isFinite(minutes) || minutes < 0.1 || minutes > 1440) {
+    setStatus('Timer must be between 0.1 and 1440 minutes.');
+    return;
+  }
+  loc.node.timer = { minutes, endsAt: Date.now() + minutes * 60000 };
+  touch(t);
+  renderTree();
+  save();
+  closeTimerPop();
+}
+
+timerBtn.addEventListener('click', () => {
+  if (!timerPop.classList.contains('hidden')) {
+    closeTimerPop();
+    return;
+  }
+  if (focusedTaskId === null) {
+    setStatus('Focus a task first — click its text.');
+    return;
+  }
+  openTimerPop(focusedTaskId);
+});
+for (const b of timerPop.querySelectorAll<HTMLButtonElement>('[data-timer-preset]')) {
+  b.addEventListener('click', () => startTimer(Number(b.dataset.timerPreset)));
+}
+timerStartBtn.addEventListener('click', () => startTimer(parseFloat(timerCustom.value)));
+timerCancelBtn.addEventListener('click', () => {
+  const t = active();
+  const loc = t && timerTargetId !== null && locate(t.tasks, timerTargetId);
+  if (t && loc && loc.node.timer) {
+    delete loc.node.timer;
+    touch(t);
+    renderTree();
+    save();
+  }
+  closeTimerPop();
+});
+
+// Escape / outside-click close. Listeners sit on both the document and the
+// topic-view mount: while floated, PiP events never reach the opener document
+// but still bubble through the mount that moved with them.
+const onTimerEscape = (e: Event) => {
+  if ((e as KeyboardEvent).key === 'Escape' && !timerPop.classList.contains('hidden')) closeTimerPop();
+};
+const onTimerOutside = (e: Event) => {
+  if (timerPop.classList.contains('hidden')) return;
+  if ((e.target as HTMLElement).closest('#timer-pop, #timer')) return;
+  closeTimerPop();
+};
+for (const target of [document, document.getElementById('topic-view')!]) {
+  target.addEventListener('keydown', onTimerEscape);
+  target.addEventListener('click', onTimerOutside);
+}
 
 // --- Export ---------------------------------------------------------------------
 document.getElementById('export-pdf')!.addEventListener('click', async () => {
@@ -766,4 +900,24 @@ void (async () => {
   updateSpotlightBtn();
   topics = await loadTopics();
   selectTopic(topics[0]?.id ?? null);
+  // One shared 1s tick: refreshes chip text/state in place — never renderTree()
+  // or save(), so textarea identity and focus survive while typing (also in PiP,
+  // where this board-window interval keeps running on the moved DOM).
+  setInterval(() => {
+    for (const chip of treeEl.querySelectorAll<HTMLElement>('[data-timer-id]')) {
+      const ends = Number(chip.dataset.ends);
+      if (!Number.isFinite(ends)) continue;
+      if (ends > Date.now()) {
+        chip.textContent = `⏱ ${fmtRemaining(ends)}`;
+      } else if (chip.dataset.state !== 'done') {
+        chip.dataset.state = 'done';
+        chip.classList.add('timer-done');
+        chip.textContent = '⏰ time’s up';
+        chip.closest('[data-id]')?.classList.add('row-timer-done');
+        const t = active();
+        const loc = t && locate(t.tasks, chip.dataset.timerId!);
+        setStatus(`Time’s up — ${loc?.node.text || 'task'}`);
+      }
+    }
+  }, 1000);
 })();
