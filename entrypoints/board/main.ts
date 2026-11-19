@@ -153,6 +153,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 
 const topicsEl = document.getElementById('topics')!;
 const treeEl = document.getElementById('tree')!;
+// Cached node reference: the mount MOVES into the PiP document while floating,
+// so document.getElementById('topic-view') in the opener returns null there.
+const topicViewEl = document.getElementById('topic-view')!;
 const titleInput = document.getElementById('topic-title') as HTMLInputElement;
 const progressEl = document.getElementById('topic-progress')!;
 const savedEl = document.getElementById('saved')!;
@@ -245,7 +248,7 @@ function updateFadeBtn() {
 }
 
 function applyFade(idle: boolean) {
-  document.getElementById('topic-view')!.classList.toggle('fade-idle', fadeOn && pipWin !== null && idle);
+  topicViewEl.classList.toggle('fade-idle', fadeOn && pipWin !== null && idle);
 }
 
 // --- Sidebar: topics -----------------------------------------------------------
@@ -609,7 +612,7 @@ function renderTree(focusId?: string | null) {
 
 function renderTopicView() {
   const t = active();
-  const view = document.getElementById('topic-view')!;
+  const view = topicViewEl;
   const empty = document.getElementById('empty')!;
   const ph = document.getElementById('pip-placeholder')!;
   const floating = !!pipWin && !pipWin.closed;
@@ -699,7 +702,7 @@ fadeBtn.addEventListener('click', () => {
   fadeOn = !fadeOn;
   void browser.storage?.local.set({ fade: fadeOn });
   updateFadeBtn();
-  if (!fadeOn) document.getElementById('topic-view')!.classList.remove('fade-idle');
+  if (!fadeOn) topicViewEl.classList.remove('fade-idle');
   setStatus(fadeOn ? 'Fade on — floating window dims when the pointer leaves' : 'Fade off');
 });
 
