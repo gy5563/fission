@@ -1,15 +1,17 @@
 @import 'tailwindcss';
 
-/* Active task row: a persistent "you are here" marker — a left accent bar plus a
-   soft tint. The inset shadow adds the bar without shifting layout, and the tint
-   spans the whole row so it stays visible even when the tree scrolls horizontally. */
+/* Active task row: a persistent "you are here" marker — soft tint + green border.
+   Every row carries a 1px transparent border (below), so activation changes
+   border COLOR only and never shifts layout. */
 #tree [data-id].row-active {
   background-color: rgb(187 247 208 / 0.5);
-  border: 1px solid #16a34a;
+  border-color: #16a34a;
 }
 
-/* Spotlight mode: fade rows outside the active task's branch (smooth transition). */
+/* All rows: 1px transparent border reserves the active row's border geometry,
+   and the opacity transition smooths fade-on-leave. */
 #tree [data-id] {
+  border: 1px solid transparent;
   transition: opacity 120ms ease;
 }
 #tree [data-id].row-dim {
