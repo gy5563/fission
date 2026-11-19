@@ -1,6 +1,13 @@
 // Fission data model: topics containing checklists nested up to MAX_DEPTH tiers.
 // Pure helpers + storage persistence; UI lives in entrypoints/board.
 
+/** Per-task countdown. endsAt is absolute epoch ms so remaining time survives
+ *  close/reopen and browser restart; running vs finished is derived from
+ *  endsAt vs Date.now() — no other state is stored. */
+export interface TaskTimer {
+  minutes: number;
+  endsAt: number;
+}
 export interface TaskNode {
   id: string;
   text: string;
@@ -8,6 +15,8 @@ export interface TaskNode {
   children: TaskNode[];
   /** UI fold state: when true, children are hidden in the board (persisted). */
   collapsed?: boolean;
+  /** Countdown timer; finished timers persist until the user cancels. */
+  timer?: TaskTimer;
 }
 export interface Topic {
   id: string;
@@ -60,6 +69,17 @@ export function sanitizeTopics(v: unknown): Topic[] {
           children: [],
         };
         if (n.collapsed === true) node.collapsed = true;
+        const tm = n.timer;
+        if (tm && typeof tm === 'object' && !Array.isArray(tm)) {
+          const { minutes, endsAt } = tm as Record<string, unknown>;
+          if (
+            typeof minutes === 'number' && Number.isFinite(minutes) &&
+            minutes > 0 && minutes <= 1440 &&
+            typeof endsAt === 'number' && Number.isFinite(endsAt) && endsAt > 0
+          ) {
+            node.timer = { minutes, endsAt };
+          }
+        }
         dest.push(node);
         if (Array.isArray(n.children) && n.children.length && depth < MAX_DEPTH) {
           stack.push({ src: n.children, dest: node.children, depth: depth + 1 });
