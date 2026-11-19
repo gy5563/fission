@@ -5,6 +5,7 @@
    spans the whole row so it stays visible even when the tree scrolls horizontally. */
 #tree [data-id].row-active {
   background-color: rgb(187 247 208 / 0.5);
+  border: 1px solid #16a34a;
 }
 
 /* Spotlight mode: fade rows outside the active task's branch (smooth transition). */
