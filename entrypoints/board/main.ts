@@ -77,8 +77,6 @@ let restoreDock: (() => void) | null = null;
 const expandedIds = new Set<string>();
 // UI-only: the task row the user is currently working in (a persistent "you are here" marker).
 let focusedTaskId: string | null = null;
-// UI-only: spotlight mode — fade every row outside the active task's branch.
-let spotlightOn = false;
 let fadeOn = true;
 const INDENT = 18; // px per tier
 const CLAMP_H = 44; // 2 lines (leading-5 = 20px) + 4px vertical padding
@@ -111,8 +109,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">↓ PDF</button>
           <button id="export-md" title="Export as a Markdown checklist"
             class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">↓ MD</button>
-          <button id="spotlight" title="Spotlight mode — fade everything except the current task" aria-pressed="false"
-            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">◐ Spotlight</button>
           <button id="timer" title="Set a countdown timer for the current task"
             class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">⏱ Timer</button>
           <div id="timer-pop"
@@ -161,7 +157,6 @@ const progressEl = document.getElementById('topic-progress')!;
 const savedEl = document.getElementById('saved')!;
 const statusEl = document.getElementById('status')!;
 const floatBtn = document.getElementById('float') as HTMLButtonElement;
-const spotlightBtn = document.getElementById('spotlight') as HTMLButtonElement;
 const fadeBtn = document.getElementById('fade') as HTMLButtonElement;
 const timerBtn = document.getElementById('timer') as HTMLButtonElement;
 const timerPop = document.getElementById('timer-pop')!;
@@ -217,25 +212,6 @@ function markActiveRow(id: string | null) {
   for (const el of treeEl.querySelectorAll<HTMLElement>('[data-id]')) {
     el.classList.toggle('row-active', el.dataset.id === id);
   }
-  applySpotlight();
-}
-
-/** Spotlight: keep only the active task at full strength; fade every other row
- *  (no-op when spotlight is off or nothing is focused). */
-function applySpotlight() {
-  const target = spotlightOn ? focusedTaskId : null;
-  for (const el of treeEl.querySelectorAll<HTMLElement>('[data-id]')) {
-    el.classList.toggle('row-dim', target !== null && el.dataset.id !== target);
-  }
-}
-
-function updateSpotlightBtn() {
-  spotlightBtn.className =
-    'shrink-0 rounded-md border px-2 py-1 text-[10px] ' +
-    (spotlightOn
-      ? 'border-neutral-600 bg-neutral-600 text-white shadow-sm'
-      : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800');
-  spotlightBtn.setAttribute('aria-pressed', String(spotlightOn));
 }
 
 function updateFadeBtn() {
@@ -600,7 +576,6 @@ function renderTree(focusId?: string | null) {
   };
   build(t.tasks, 1);
   updateBadges();
-  applySpotlight();
   if (focusId) {
     const ta = treeEl.querySelector<HTMLTextAreaElement>(
       `[data-id="${CSS.escape(focusId)}"] textarea`,
@@ -687,15 +662,6 @@ document.getElementById('add-root')!.addEventListener('click', () => {
     renderTree(node.id);
     save();
   }
-});
-
-// --- Spotlight mode --------------------------------------------------------------
-spotlightBtn.addEventListener('click', () => {
-  spotlightOn = !spotlightOn;
-  void browser.storage?.local.set({ spotlight: spotlightOn });
-  updateSpotlightBtn();
-  applySpotlight();
-  setStatus(spotlightOn ? 'Spotlight on — focus a task to light up its branch' : 'Spotlight off');
 });
 
 fadeBtn.addEventListener('click', () => {
@@ -926,9 +892,7 @@ floatBtn.addEventListener('click', () => {
 
 // --- Init -------------------------------------------------------------------------
 void (async () => {
-  const pref = await browser.storage?.local.get(['spotlight', 'fade']);
-  spotlightOn = !!pref?.spotlight;
-  updateSpotlightBtn();
+  const pref = await browser.storage?.local.get(['fade']);
   fadeOn = pref?.fade !== false;
   updateFadeBtn();
   topics = await loadTopics();

@@ -14,9 +14,6 @@
   border: 1px solid transparent;
   transition: opacity 120ms ease;
 }
-#tree [data-id].row-dim {
-  opacity: 0.4;
-}
 
 /* Finished countdown: amber chip + soft row tint, kept until the timer is cancelled. */
 #tree [data-timer-id].timer-done {

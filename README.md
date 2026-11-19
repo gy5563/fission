@@ -36,9 +36,6 @@ keep the whole tree in a Picture-in-Picture window while you work.
 - **Active-row highlight** — the task you're working in gets a soft green tint
   ("you are here"); it follows focus and clicks, persists after you click away,
   and survives re-renders, horizontal scroll, and the PiP window
-- **Spotlight mode** — an opt-in `◐ Spotlight` toggle that fades every row except
-  the single task you're working in (≈40% opacity, still readable), so one task
-  stands out in a big tree; the preference is saved and it works in PiP too
 - **Per-task timers** — focus a task, hit `⏱ Timer`, pick a preset
   (5 / 15 / 25 / 45 min) or a custom length. A live `⏱ mm:ss` chip counts down
   on the row and turns into an amber `⏰ time's up` when it ends. Timers keep
