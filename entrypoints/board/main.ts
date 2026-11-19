@@ -230,7 +230,7 @@ function updateSpotlightBtn() {
   spotlightBtn.className =
     'shrink-0 rounded-md border px-2 py-1 text-[10px] ' +
     (spotlightOn
-      ? 'border-neutral-900 bg-neutral-600 text-white'
+      ? 'border-neutral-600 bg-neutral-600 text-white shadow-sm'
       : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800');
   spotlightBtn.setAttribute('aria-pressed', String(spotlightOn));
 }
@@ -239,7 +239,7 @@ function updateFadeBtn() {
   fadeBtn.className =
     'shrink-0 rounded-md border px-2 py-1 text-[10px] ' +
     (fadeOn
-      ? 'border-neutral-900 bg-neutral-600 text-white'
+      ? 'border-neutral-600 bg-neutral-600 text-white shadow-sm'
       : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800');
   fadeBtn.setAttribute('aria-pressed', String(fadeOn));
 }
