@@ -79,6 +79,7 @@ const expandedIds = new Set<string>();
 let focusedTaskId: string | null = null;
 // UI-only: spotlight mode — fade every row outside the active task's branch.
 let spotlightOn = false;
+let fadeOn = true;
 const INDENT = 18; // px per tier
 const CLAMP_H = 44; // 2 lines (leading-5 = 20px) + 4px vertical padding
 
@@ -130,6 +131,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             </div>
             <button id="timer-cancel" class="mt-2 hidden w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-red-500 hover:bg-neutral-100">Cancel timer</button>
           </div>
+          <button id="fade" title="Fade the floating window when the pointer leaves — the current task stays visible" aria-pressed="false"
+            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">◑ Fade</button>
           <button id="float" class="shrink-0 rounded-md bg-neutral-600 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 shadow-sm">⧉ Float</button>
         </header>
         <div id="tree-scroll" class="min-h-0 flex-1 overflow-auto p-3">
@@ -156,6 +159,7 @@ const savedEl = document.getElementById('saved')!;
 const statusEl = document.getElementById('status')!;
 const floatBtn = document.getElementById('float') as HTMLButtonElement;
 const spotlightBtn = document.getElementById('spotlight') as HTMLButtonElement;
+const fadeBtn = document.getElementById('fade') as HTMLButtonElement;
 const timerBtn = document.getElementById('timer') as HTMLButtonElement;
 const timerPop = document.getElementById('timer-pop')!;
 const timerCustom = document.getElementById('timer-custom') as HTMLInputElement;
@@ -229,6 +233,19 @@ function updateSpotlightBtn() {
       ? 'border-neutral-900 bg-neutral-600 text-white'
       : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800');
   spotlightBtn.setAttribute('aria-pressed', String(spotlightOn));
+}
+
+function updateFadeBtn() {
+  fadeBtn.className =
+    'shrink-0 rounded-md border px-2 py-1 text-[10px] ' +
+    (fadeOn
+      ? 'border-neutral-900 bg-neutral-600 text-white'
+      : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800');
+  fadeBtn.setAttribute('aria-pressed', String(fadeOn));
+}
+
+function applyFade(idle: boolean) {
+  document.getElementById('topic-view')!.classList.toggle('fade-idle', fadeOn && pipWin !== null && idle);
 }
 
 // --- Sidebar: topics -----------------------------------------------------------
@@ -407,7 +424,7 @@ function renderTree(focusId?: string | null) {
       const row = document.createElement('div');
       row.dataset.id = n.id;
       row.className =
-        'group flex min-w-full items-center gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100' +
+        'row group flex min-w-full items-center gap-1 rounded-md px-1 py-0.5 hover:bg-neutral-100' +
         (n.id === focusedTaskId ? ' row-active' : '');
       row.style.paddingLeft = `${(depth - 1) * INDENT + 4}px`;
 
@@ -678,6 +695,14 @@ spotlightBtn.addEventListener('click', () => {
   setStatus(spotlightOn ? 'Spotlight on — focus a task to light up its branch' : 'Spotlight off');
 });
 
+fadeBtn.addEventListener('click', () => {
+  fadeOn = !fadeOn;
+  void browser.storage?.local.set({ fade: fadeOn });
+  updateFadeBtn();
+  if (!fadeOn) document.getElementById('topic-view')!.classList.remove('fade-idle');
+  setStatus(fadeOn ? 'Fade on — floating window dims when the pointer leaves' : 'Fade off');
+});
+
 // --- Countdown timer --------------------------------------------------------------
 // UI-only: which task the open popover targets.
 let timerTargetId: string | null = null;
@@ -857,6 +882,8 @@ async function floatIntoPip() {
     const mount = document.getElementById('topic-view')!;
     const originalParent = mount.parentElement!;
     win.document.body.append(mount);
+    win.document.addEventListener('mouseenter', () => applyFade(false));
+    win.document.addEventListener('mouseleave', () => applyFade(true));
     mount.classList.remove('hidden');
     mount.classList.add('flex');
     document.getElementById('empty')!.classList.add('hidden');
@@ -870,6 +897,7 @@ async function floatIntoPip() {
       if (!pipWin) return; // already docked — pagehide and explicit Dock can both run
       pipWin = null;
       originalParent.append(mount);
+      mount.classList.remove('fade-idle');
       ph.classList.add('hidden');
       ph.classList.remove('flex');
       floatBtn.textContent = '⧉ Float';
@@ -895,9 +923,11 @@ floatBtn.addEventListener('click', () => {
 
 // --- Init -------------------------------------------------------------------------
 void (async () => {
-  const pref = await browser.storage?.local.get('spotlight');
+  const pref = await browser.storage?.local.get(['spotlight', 'fade']);
   spotlightOn = !!pref?.spotlight;
   updateSpotlightBtn();
+  fadeOn = pref?.fade !== false;
+  updateFadeBtn();
   topics = await loadTopics();
   selectTopic(topics[0]?.id ?? null);
   // One shared 1s tick: refreshes chip text/state in place — never renderTree()

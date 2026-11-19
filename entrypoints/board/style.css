@@ -24,3 +24,16 @@
 #tree [data-id].row-timer-done {
   background-color: rgb(254 243 199 / 0.5);
 }
+
+/* Fade-on-leave (PiP): dim everything except the active task row. Per-element
+   opacity — an ancestor fade would multiply into the exempt row. */
+#topic-view.fade-idle > :not(#tree-scroll),
+#topic-view.fade-idle #add-root,
+#topic-view.fade-idle .row:not(.row-active) {
+  opacity: 0.4;
+}
+#topic-view > header,
+#topic-view > #status,
+#topic-view #add-root {
+  transition: opacity 200ms ease;
+}
