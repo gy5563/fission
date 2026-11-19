@@ -108,9 +108,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             class="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-neutral-200 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200" />
           <span id="topic-progress" class="shrink-0 text-xs text-neutral-500"></span>
           <button id="export-pdf" title="Export the visual tree (with checked states) as PDF"
-            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">⬇ PDF</button>
+            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">↓ PDF</button>
           <button id="export-md" title="Export as a Markdown checklist"
-            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">⬇ MD</button>
+            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">↓ MD</button>
           <button id="spotlight" title="Spotlight mode — fade everything except the current task" aria-pressed="false"
             class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">◐ Spotlight</button>
           <button id="timer" title="Set a countdown timer for the current task"
