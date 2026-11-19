@@ -18,10 +18,10 @@ async function openBoard() {
 }
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div class="flex w-80 flex-col items-center gap-3 p-6 font-sans">
+  <div class="flex w-80 flex-col items-center gap-3 p-6 font-sans text-neutral-800">
     <h1 class="text-2xl font-bold tracking-tight">Fission</h1>
     <p class="text-sm text-neutral-500">Break it down. Check it off. Float it on top.</p>
-    <button id="open" class="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700">
+    <button id="open" class="rounded-md bg-neutral-600 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 shadow-sm">
       Open Fission
     </button>
     <p id="count" class="text-xs text-neutral-400"></p>

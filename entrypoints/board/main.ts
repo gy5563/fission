@@ -84,14 +84,14 @@ const CLAMP_H = 44; // 2 lines (leading-5 = 20px) + 4px vertical padding
 
 // Static markup only — all user text goes through .value / textContent.
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div class="flex h-screen bg-neutral-50 font-sans text-neutral-900">
+  <div class="flex h-screen bg-neutral-50 font-sans text-neutral-800">
     <aside class="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-white">
       <div class="flex items-center justify-between px-3 py-2">
         <span class="text-sm font-bold tracking-tight">Fission</span>
         <span id="saved" class="text-xs text-neutral-400"></span>
       </div>
       <div class="px-2 pb-2">
-        <button id="new-topic" class="w-full rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700">
+        <button id="new-topic" class="w-full rounded-md bg-neutral-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 shadow-sm">
           + New topic
         </button>
       </div>
@@ -104,38 +104,38 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div id="topic-view" class="hidden min-h-0 flex-1 flex-col">
         <header class="relative flex items-center gap-2 border-b border-neutral-200 px-3 py-2">
           <input id="topic-title" title="Rename topic"
-            class="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-neutral-200 focus:border-neutral-400" />
+            class="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold outline-none hover:border-neutral-200 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200" />
           <span id="topic-progress" class="shrink-0 text-xs text-neutral-500"></span>
           <button id="export-pdf" title="Export the visual tree (with checked states) as PDF"
-            class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⬇ PDF</button>
+            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">⬇ PDF</button>
           <button id="export-md" title="Export as a Markdown checklist"
-            class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⬇ MD</button>
+            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">⬇ MD</button>
           <button id="spotlight" title="Spotlight mode — fade everything except the current task" aria-pressed="false"
-            class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">◐ Spotlight</button>
+            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">◐ Spotlight</button>
           <button id="timer" title="Set a countdown timer for the current task"
-            class="shrink-0 rounded border border-neutral-200 px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100">⏱ Timer</button>
+            class="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">⏱ Timer</button>
           <div id="timer-pop"
-            class="absolute right-0 top-full z-10 mt-1 hidden w-56 rounded border border-neutral-200 bg-white p-2 shadow-md">
+            class="absolute right-0 top-full z-10 mt-1 hidden w-56 rounded-lg border border-neutral-200 bg-white p-2 shadow-md">
             <div class="flex gap-1">
-              <button data-timer-preset="5" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">5 min</button>
-              <button data-timer-preset="15" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">15 min</button>
-              <button data-timer-preset="25" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">25 min</button>
-              <button data-timer-preset="45" class="flex-1 rounded border border-neutral-200 px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100">45 min</button>
+              <button data-timer-preset="5" class="flex-1 rounded-md border border-neutral-200 bg-white px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">5 min</button>
+              <button data-timer-preset="15" class="flex-1 rounded-md border border-neutral-200 bg-white px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">15 min</button>
+              <button data-timer-preset="25" class="flex-1 rounded-md border border-neutral-200 bg-white px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">25 min</button>
+              <button data-timer-preset="45" class="flex-1 rounded-md border border-neutral-200 bg-white px-1 py-1 text-[10px] text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800">45 min</button>
             </div>
             <div class="mt-2 flex items-center gap-1">
               <input id="timer-custom" type="number" min="0.1" max="1440" step="0.1" value="25" title="Custom minutes"
-                class="w-16 rounded border border-neutral-300 px-1 py-0.5 text-xs outline-none focus:border-neutral-400" />
+                class="w-16 rounded-md border border-neutral-200 px-1 py-0.5 text-xs outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200" />
               <span class="text-[10px] text-neutral-400">min</span>
-              <button id="timer-start" class="ml-auto rounded bg-neutral-900 px-2 py-1 text-[10px] font-medium text-white hover:bg-neutral-700">Start</button>
+              <button id="timer-start" class="ml-auto rounded bg-neutral-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-neutral-700 shadow-sm">Start</button>
             </div>
-            <button id="timer-cancel" class="mt-2 hidden w-full rounded border border-neutral-200 px-2 py-1 text-[10px] text-red-500 hover:bg-neutral-100">Cancel timer</button>
+            <button id="timer-cancel" class="mt-2 hidden w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-[10px] text-red-500 hover:bg-neutral-100">Cancel timer</button>
           </div>
-          <button id="float" class="shrink-0 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">⧉ Float</button>
+          <button id="float" class="shrink-0 rounded-md bg-neutral-600 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 shadow-sm">⧉ Float</button>
         </header>
         <div id="tree-scroll" class="min-h-0 flex-1 overflow-auto p-3">
           <div id="tree"></div>
           <button id="add-root"
-            class="mt-1 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700">
+            class="mt-1 rounded-md border border-dashed border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700">
             + Add task
           </button>
         </div>
@@ -224,10 +224,10 @@ function applySpotlight() {
 
 function updateSpotlightBtn() {
   spotlightBtn.className =
-    'shrink-0 rounded border px-2 py-1 text-[10px] ' +
+    'shrink-0 rounded-md border px-2 py-1 text-[10px] ' +
     (spotlightOn
-      ? 'border-neutral-900 bg-neutral-900 text-white'
-      : 'border-neutral-200 text-neutral-500 hover:bg-neutral-100');
+      ? 'border-neutral-900 bg-neutral-600 text-white'
+      : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-800');
   spotlightBtn.setAttribute('aria-pressed', String(spotlightOn));
 }
 
@@ -261,7 +261,7 @@ function renderTopics() {
 
     const rename = document.createElement('button');
     rename.className =
-      'rounded px-1 text-xs text-neutral-300 opacity-0 hover:bg-neutral-200 hover:text-neutral-700 group-hover:opacity-100';
+      'rounded-md px-1 text-xs text-neutral-300 opacity-0 hover:bg-neutral-100 hover:text-neutral-700 group-hover:opacity-100';
     rename.textContent = '✎';
     rename.title = 'Rename topic';
     rename.addEventListener('click', (e) => {
@@ -294,7 +294,7 @@ function renderTopics() {
 
     const del = document.createElement('button');
     del.className =
-      'rounded px-1 text-xs text-neutral-300 opacity-0 hover:bg-neutral-200 hover:text-neutral-700 group-hover:opacity-100';
+      'rounded-md px-1 text-xs text-neutral-300 opacity-0 hover:bg-neutral-100 hover:text-neutral-700 group-hover:opacity-100';
     del.textContent = '×';
     del.title = 'Delete topic';
     del.addEventListener('click', (e) => {
@@ -323,7 +323,7 @@ const cbClass = (s: CheckState) =>
 const cbGlyph = (s: CheckState) => (s === 'all' ? '✓' : '');
 
 const textClass = (done: boolean) =>
-  'block w-full resize-none overflow-hidden rounded border border-transparent bg-transparent px-1 py-0.5 text-sm leading-5 outline-none hover:border-neutral-200 focus:border-neutral-400' +
+  'block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm leading-5 outline-none hover:border-neutral-200 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200' +
   (done ? ' text-neutral-400 line-through' : '');
 
 const badgeClass = (p: { done: number; total: number }) =>
@@ -416,7 +416,7 @@ function renderTree(focusId?: string | null) {
       if (n.children.length) {
         const b = document.createElement('button');
         b.className =
-          'flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
+          'flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[10px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700';
         b.textContent = n.collapsed ? '▸' : '▾';
         b.title = n.collapsed ? 'Expand subtasks' : 'Collapse subtasks';
         b.dataset.fold = n.id;
@@ -466,7 +466,7 @@ function renderTree(focusId?: string | null) {
 
       const expandBtn = document.createElement('button');
       expandBtn.className =
-        'shrink-0 rounded px-1 text-[10px] leading-4 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
+        'shrink-0 rounded-md px-1 text-[10px] leading-4 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700';
       expandBtn.title = 'Expand / collapse text';
       expandBtn.style.display = 'none';
 
@@ -545,7 +545,7 @@ function renderTree(focusId?: string | null) {
       actions.className = 'flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100';
       const mkBtn = (label: string, title: string, fn: () => void) => {
         const b = document.createElement('button');
-        b.className = 'rounded px-1 text-xs text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700';
+        b.className = 'rounded-md px-1 text-xs text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700';
         b.textContent = label;
         b.title = title;
         b.addEventListener('click', (e) => {
@@ -851,7 +851,7 @@ async function floatIntoPip() {
     pipWin = win;
     win.document.title = `Fission — ${t.title}`;
     mirrorStyles(win.document);
-    win.document.body.className = 'm-0 flex h-screen flex-col bg-neutral-50 font-sans text-neutral-900';
+    win.document.body.className = 'm-0 flex h-screen flex-col bg-neutral-50 font-sans text-neutral-800';
     // Move the SAME topic view (header + tree) into the PiP window — live DOM,
     // so every edit/check/add works while floating, and docking restores it.
     const mount = document.getElementById('topic-view')!;
