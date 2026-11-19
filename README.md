@@ -54,7 +54,8 @@ keep the whole tree in a Picture-in-Picture window while you work.
 - **Export**
   - **PDF** — a horizontal (left-to-right) tree diagram: boxes, smooth curved
     connectors, green checkmarks for done tasks, progress badges on parents,
-    strikethrough text
+    strikethrough text. Non-Latin text (e.g. Chinese) renders via an embedded
+    CJK font, loaded only when the topic needs it
   - **Markdown** — nested `- [x]` / `- [ ]` with a progress header
 - **Always saved** — every edit is written to storage immediately, so lists,
   progress, timers and preferences survive closing the window or restarting
@@ -69,7 +70,7 @@ keep the whole tree in a Picture-in-Picture window while you work.
 | Piece | Role |
 | --- | --- |
 | `utils/tree.ts` | Topic/task model (incl. timers), tree ops (locate/add/indent/outdent/remove), depth rules, down-only cascade, progress, Markdown |
-| `utils/pdf.ts` | jsPDF visual-tree renderer (horizontal leaf-cursor layout, curved Bézier links, scaled to one A4 landscape page); lazy-loaded on export |
+| `utils/pdf.ts` | jsPDF visual-tree renderer (horizontal leaf-cursor layout, curved Bézier links, scaled to one A4 landscape page); lazy-loaded on export, with a bundled CJK font (Noto Sans CJK, OFL-1.1) for non-Latin text |
 | `entrypoints/background.ts` | Opens/focuses the single persistent board window |
 | `entrypoints/board/` | Topic sidebar + checklist tree + Document PiP host + exports |
 | `entrypoints/popup/` | Launcher (a popup can't host PiP — it unloads on focus loss) |
@@ -91,7 +92,16 @@ Requires Chrome 116+ for Document Picture-in-Picture.
 ```sh
 pnpm dev        # WXT dev server with HMR
 pnpm compile    # typecheck (run `pnpm exec wxt prepare` first if WXT types are missing)
+pnpm test       # pure-logic unit tests (Node's built-in test runner, no extra deps)
 pnpm build      # production build → .output/chrome-mv3
+```
+
+`pnpm dev` launches an **unbranded Chromium** — branded Chrome ≥137 blocks
+`--load-extension`. Install one once (any OS), or set `FISSION_CHROMIUM` to an
+existing Chromium / Chrome-for-Testing binary:
+
+```sh
+npx @puppeteer/browsers install chromium@latest --path ~/.hermes/browsers
 ```
 
 ## License

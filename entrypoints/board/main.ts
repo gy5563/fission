@@ -46,9 +46,12 @@ let statusTimer: ReturnType<typeof setTimeout> | undefined;
 // Canonical-JSON snapshots of our own recent writes, so storage.onChanged can
 // skip self-echoes — applying them would re-render mid-keystroke (and steal
 // focus while editing in PiP, where the opener's activeElement is not the
-// textarea). Refcounted: two consecutive writes can serialize identically
-// (same-millisecond touch), and each still gets its own echo to consume.
+// textarea). Refcounted in case an external write interleaves two identical
+// saves. lastSavedSnap skips no-op writes entirely: chrome.storage fires no
+// onChanged when the value is unchanged, so registering an echo for one would
+// leak an entry that could later swallow a genuine external write.
 const recentSaves = new Map<string, number>();
+let lastSavedSnap: string | null = null;
 function consumeSnap(snap: string) {
   const n = recentSaves.get(snap);
   if (n === undefined) return;
@@ -191,11 +194,17 @@ function flashSaved() {
 // right after typing lost the last edits.
 function save() {
   const snap = canonicalJson(topics);
+  if (snap === lastSavedSnap) {
+    flashSaved(); // already persisted verbatim — nothing to write, no echo coming
+    return;
+  }
+  lastSavedSnap = snap;
   recentSaves.set(snap, (recentSaves.get(snap) ?? 0) + 1);
   void saveTopics(topics)
     .then(flashSaved)
     .catch(() => {
       consumeSnap(snap);
+      if (lastSavedSnap === snap) lastSavedSnap = null; // retry must not be skipped
       setStatus('Save failed — device storage may be full.');
     });
 }
@@ -512,7 +521,9 @@ function renderTree(focusId?: string | null) {
           else doIndent(n.id);
         } else if (e.key === 'Backspace' && ta.value === '') {
           e.preventDefault();
-          deleteTask(n, true);
+          // Empty leaf: delete outright. Empty parent: confirm first — force
+          // would silently drop its whole subtree.
+          deleteTask(n, n.children.length === 0);
         }
       });
 
@@ -785,7 +796,7 @@ document.getElementById('export-pdf')!.addEventListener('click', async () => {
   try {
     // Lazy-load jsPDF so the board's initial bundle stays small.
     const { exportTopicPdf } = await import('../../utils/pdf');
-    exportTopicPdf(t);
+    await exportTopicPdf(t);
     setStatus('PDF exported ✓');
   } catch (err) {
     setStatus(`PDF failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -814,6 +825,7 @@ browser.storage?.onChanged.addListener((changes, areaName) => {
   const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
   if (typing && (ae.closest('#tree') || ae.id === 'topic-title')) return; // mid-keystroke
   topics = sanitizeTopics(next);
+  lastSavedSnap = null; // stored value changed under us — the next save must write
   if (!active()) selectTopic(topics[0]?.id ?? null);
   else {
     renderTopics();

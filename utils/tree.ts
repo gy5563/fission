@@ -145,8 +145,11 @@ export function locate(
   return null;
 }
 export function subtreeHeight(node: TaskNode): number {
-  if (!node.children.length) return 1;
-  return 1 + Math.max(...node.children.map(subtreeHeight));
+  // Loop instead of Math.max(...children.map()) — breadth is unbounded, and a
+  // huge sibling list would overflow the call stack via spread.
+  let h = 0;
+  for (const c of node.children) h = Math.max(h, subtreeHeight(c));
+  return 1 + h;
 }
 export function countNodes(nodes: TaskNode[]): number {
   return nodes.reduce((sum, n) => sum + 1 + countNodes(n.children), 0);

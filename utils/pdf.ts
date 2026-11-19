@@ -48,8 +48,48 @@ function layout(tasks: TaskNode[]): { pos: Map<string, Pos>; width: number; heig
 }
 
 // jsPDF's standard fonts are WinAnsi — keep Latin + common punctuation, replace the rest.
-const clean = (s: string) =>
-  s.replace(/[^\u0020-\u007E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026]/g, '?');
+const NON_WINANSI_SRC = '[^\\u0020-\\u007E\\u00A0-\\u00FF\\u2013\\u2014\\u2018\\u2019\\u201C\\u201D\\u2022\\u2026]';
+const clean = (s: string) => s.replace(new RegExp(NON_WINANSI_SRC, 'g'), '?');
+const hasNonWinAnsi = (s: string) => new RegExp(NON_WINANSI_SRC).test(s);
+// With the embedded CJK font almost everything renders; strip only control chars
+// (keep newlines — splitTextToSize breaks on them). Glyphs the font lacks show as
+// blanks, which beats a wall of '?'.
+const cleanUnicode = (s: string) =>
+  s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+
+// --- CJK support ------------------------------------------------------------------
+// jsPDF's built-in fonts are WinAnsi-only, so Chinese/Japanese/Korean text would
+// export as '?'. When a topic contains anything beyond WinAnsi, embed Noto Sans
+// CJK (OFL-1.1, bundled under public/fonts; Latin + CJK + symbols) instead.
+// Fetched lazily and cached across exports, so Latin-only topics never pay the
+// ~13 MB cost.
+const CJK_FONT = 'NotoSansCJK';
+const CJK_FONT_FILE = 'NotoSansCJK-Regular.ttf';
+let cjkFontB64: string | null = null;
+async function loadCjkFontB64(): Promise<string> {
+  if (cjkFontB64 !== null) return cjkFontB64;
+  const res = await fetch(browser.runtime.getURL(`/fonts/${CJK_FONT_FILE}`));
+  if (!res.ok) throw new Error(`CJK font unavailable (${res.status})`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  cjkFontB64 = btoa(bin);
+  return cjkFontB64;
+}
+/** Title + every task text, for the WinAnsi check. */
+function topicText(topic: Topic): string {
+  let s = topic.title;
+  const walk = (ns: TaskNode[]) => {
+    for (const n of ns) {
+      s += n.text;
+      walk(n.children);
+    }
+  };
+  walk(topic.tasks);
+  return s;
+}
 
 type RGB = [number, number, number];
 const GREEN: RGB = [22, 163, 74];
@@ -57,8 +97,17 @@ const AMBER: RGB = [217, 119, 6];
 const GRAY: RGB = [163, 163, 163];
 const INK: RGB = [23, 23, 23];
 
-export function exportTopicPdf(topic: Topic): void {
+export async function exportTopicPdf(topic: Topic): Promise<void> {
+  const cjk = hasNonWinAnsi(topicText(topic));
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4', compress: true });
+  const font = cjk ? CJK_FONT : 'helvetica';
+  const cleanText = cjk ? cleanUnicode : clean;
+  if (cjk) {
+    const b64 = await loadCjkFontB64();
+    doc.addFileToVFS(CJK_FONT_FILE, b64);
+    doc.addFont(CJK_FONT_FILE, CJK_FONT, 'normal');
+    doc.addFont(CJK_FONT_FILE, CJK_FONT, 'bold'); // single weight — bold maps to regular
+  }
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 36;
@@ -66,11 +115,11 @@ export function exportTopicPdf(topic: Topic): void {
   const p = topicProgress(topic);
 
   // Header band
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.setFontSize(16);
   doc.setTextColor(...INK);
-  doc.text(clean(topic.title), margin, 32);
-  doc.setFont('helvetica', 'normal');
+  doc.text(cleanText(topic.title), margin, 32);
+  doc.setFont(font, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(115, 115, 115);
   doc.text(
@@ -173,7 +222,7 @@ export function exportTopicPdf(topic: Topic): void {
         // Progress badge (parents only)
         let textRight = x + w - S(8);
         if (pr.total > 0) {
-          doc.setFont('helvetica', 'bold');
+          doc.setFont(font, 'bold');
           doc.setFontSize(bfs);
           doc.setTextColor(...(allDone ? GREEN : partial ? AMBER : GRAY));
           doc.text(`${pr.done}/${pr.total}`, x + w - S(6), y + S(13), { align: 'right' });
@@ -181,11 +230,11 @@ export function exportTopicPdf(topic: Topic): void {
         }
 
         // Task text — up to 2 wrapped lines, strikethrough when done
-        doc.setFont('helvetica', 'normal');
+        doc.setFont(font, 'normal');
         doc.setFontSize(fs);
         doc.setTextColor(...(n.done ? ([120, 120, 120] as RGB) : INK));
         const maxW = Math.max(textRight - (x + S(30)), 10);
-        let lines = doc.splitTextToSize(clean(n.text || '(untitled)'), maxW) as string[];
+        let lines = doc.splitTextToSize(cleanText(n.text || '(untitled)'), maxW) as string[];
         if (lines.length > 2) {
           lines = lines.slice(0, 2);
           lines[1] = lines[1]!.replace(/.{0,3}$/, '…');
