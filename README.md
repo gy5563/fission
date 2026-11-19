@@ -33,12 +33,20 @@ keep the whole tree in a Picture-in-Picture window while you work.
   progress badge stays visible and the fold state is saved
 - **Deep-tree scrolling** — text keeps a readable minimum width, so wide trees
   scroll horizontally and the active row snaps into view
-- **Active-row highlight** — the task you're working in gets a left accent bar +
-  soft tint ("you are here"); it follows focus and clicks, persists after you
-  click away, and survives re-renders, horizontal scroll, and the PiP window
+- **Active-row highlight** — the task you're working in gets a soft green tint
+  ("you are here"); it follows focus and clicks, persists after you click away,
+  and survives re-renders, horizontal scroll, and the PiP window
 - **Spotlight mode** — an opt-in `◐ Spotlight` toggle that fades every row except
   the single task you're working in (≈40% opacity, still readable), so one task
   stands out in a big tree; the preference is saved and it works in PiP too
+- **Per-task timers** — focus a task, hit `⏱ Timer`, pick a preset
+  (5 / 15 / 25 / 45 min) or a custom length. A live `⏱ mm:ss` chip counts down
+  on the row and turns into an amber `⏰ time's up` when it ends. Timers keep
+  their end time across reloads and restarts, and work in the floating window
+- **Fade on leave** — with the `◑ Fade` toggle on (the default), the floating
+  window dims to ≈40% when your pointer leaves it — except the highlighted
+  task, which stays fully visible. Moving back in restores everything, and the
+  preference is saved
 - **Keyboard flow** — `Enter` adds the next sibling, `Backspace` on an empty
   task deletes it, `Tab`/`Shift+Tab` re-nest
 - **Full editing while floating** — the PiP window hosts the same live DOM
@@ -48,14 +56,19 @@ keep the whole tree in a Picture-in-Picture window while you work.
     connectors, green checkmarks for done tasks, progress badges on parents,
     strikethrough text
   - **Markdown** — nested `- [x]` / `- [ ]` with a progress header
+- **Always saved** — every edit is written to storage immediately, so lists,
+  progress, timers and preferences survive closing the window or restarting
+  Chrome
 - **Local-only** — everything lives in `chrome.storage.local`; no network, no
   telemetry, no account
+- **Shadcn-style grey design** — soft grey palette, rounded controls, subtle
+  shadows and focus rings across the board, popup and floating window
 
 ## Architecture
 
 | Piece | Role |
 | --- | --- |
-| `utils/tree.ts` | Topic/task model, tree ops (locate/add/indent/outdent/remove), depth rules, down-only cascade, progress, Markdown |
+| `utils/tree.ts` | Topic/task model (incl. timers), tree ops (locate/add/indent/outdent/remove), depth rules, down-only cascade, progress, Markdown |
 | `utils/pdf.ts` | jsPDF visual-tree renderer (horizontal leaf-cursor layout, curved Bézier links, scaled to one A4 landscape page); lazy-loaded on export |
 | `entrypoints/background.ts` | Opens/focuses the single persistent board window |
 | `entrypoints/board/` | Topic sidebar + checklist tree + Document PiP host + exports |
