@@ -8,7 +8,6 @@ import {
   sanitizeTopics,
   saveTopics,
   newTopic,
-  newNode,
   locate,
   addTask,
   removeTask,
@@ -46,7 +45,7 @@ let statusTimer: ReturnType<typeof setTimeout> | undefined;
 // Canonical-JSON snapshots of our own recent writes, so storage.onChanged can
 // skip self-echoes — applying them would re-render mid-keystroke (and steal
 // focus while editing in PiP, where the opener's activeElement is not the
-// textarea). Refcounted in case an external write interleaves two identical
+// editor). Refcounted in case an external write interleaves two identical
 // saves. lastSavedSnap skips no-op writes entirely: chrome.storage fires no
 // onChanged when the value is unchanged, so registering an echo for one would
 // leak an entry that could later swallow a genuine external write.
@@ -80,9 +79,19 @@ let restoreDock: (() => void) | null = null;
 const expandedIds = new Set<string>();
 // UI-only: the task row the user is currently working in (a persistent "you are here" marker).
 let focusedTaskId: string | null = null;
+// UI-only: the task whose text the ✎ popover is editing (null = closed), the
+// text it opened with (Esc restores it), and the window whose resize re-anchors
+// the popover (opener or PiP — the mount moves between them).
+let editTargetId: string | null = null;
+let editOriginalText = '';
+let editResizeWin: Window | null = null;
 let fadeOn = true;
 const INDENT = 18; // px per tier
 const CLAMP_H = 44; // 2 lines (leading-5 = 20px) + 4px vertical padding
+
+// Row labels are display-only spans; relayout re-measures the 2-line clamp
+// after the ✎ popover changes the text in place (no re-render mid-edit).
+type TaskLabel = HTMLSpanElement & { relayout?: () => void };
 
 // Static markup only — all user text goes through .value / textContent.
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
@@ -141,6 +150,16 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
             + Add task
           </button>
         </div>
+        <div id="edit-pop"
+          class="fixed z-20 hidden w-80 rounded-lg border border-neutral-200 bg-white p-2 shadow-md">
+          <textarea id="edit-text" rows="3" placeholder="Task text…"
+            class="block w-full resize-none overflow-y-auto rounded-md border border-neutral-200 px-2 py-1 text-sm leading-5 outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200"></textarea>
+          <div class="mt-1.5 flex items-center justify-between gap-2">
+            <span class="text-[10px] text-neutral-400">↵ done · ⇧↵ newline · tab re-nest · esc cancel</span>
+            <button id="edit-done"
+              class="shrink-0 rounded bg-neutral-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-neutral-700 shadow-sm">Done</button>
+          </div>
+        </div>
         <p id="status" class="px-3 pb-2 text-xs text-neutral-500"></p>
       </div>
       <div id="pip-placeholder" class="hidden flex-1 items-center justify-center p-6 text-center text-sm text-neutral-400">
@@ -166,6 +185,10 @@ const timerPop = document.getElementById('timer-pop')!;
 const timerCustom = document.getElementById('timer-custom') as HTMLInputElement;
 const timerStartBtn = document.getElementById('timer-start') as HTMLButtonElement;
 const timerCancelBtn = document.getElementById('timer-cancel') as HTMLButtonElement;
+const treeScrollEl = document.getElementById('tree-scroll')!;
+const editPop = document.getElementById('edit-pop')!;
+const editText = document.getElementById('edit-text') as HTMLTextAreaElement;
+const editDoneBtn = document.getElementById('edit-done') as HTMLButtonElement;
 
 function active(): Topic | undefined {
   return topics.find((t) => t.id === activeId);
@@ -327,8 +350,27 @@ const cbClass = (s: CheckState) =>
 
 const cbGlyph = (s: CheckState) => (s === 'all' ? '✓' : '');
 
+// Fold chevron: Lucide-style stroke with round caps/joins (soft corners), built
+// via createElementNS so no innerHTML is involved. Right = collapsed, down = open.
+const chevronSvg = (collapsed: boolean | undefined) => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2.5');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('class', 'h-4 w-4');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', collapsed ? 'm9 18 6-6-6-6' : 'm6 9 6 6 6-6');
+  svg.appendChild(path);
+  return svg;
+};
+
 const textClass = (done: boolean) =>
-  'block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm leading-5 outline-none hover:border-neutral-200 focus:border-neutral-400 focus:ring-2 focus:ring-neutral-200' +
+  'block w-full whitespace-pre-wrap break-words rounded-md border border-transparent px-1 py-0.5 text-sm leading-5 outline-none' +
   (done ? ' text-neutral-400 line-through' : '');
 
 const badgeClass = (p: { done: number; total: number }) =>
@@ -361,51 +403,49 @@ function updateBadges() {
   }
 }
 
+// Tree mutations shared by the row buttons and the ✎ editor popover.
+function doIndent(id: string) {
+  const t = active();
+  if (!t) return;
+  if (indentTask(t, id)) {
+    renderTree(id);
+    save();
+    return;
+  }
+  const reason = indentBlockReason(t, id);
+  if (reason === 'sibling') setStatus('Needs a sibling above to nest under.');
+  else if (reason === 'height') setStatus(`Too deep — this would exceed ${MAX_DEPTH} levels.`);
+  else setStatus(`Max ${MAX_DEPTH} levels — can’t indent further.`);
+}
+
+function doOutdent(id: string) {
+  const t = active();
+  if (!t) return;
+  if (outdentTask(t, id)) {
+    renderTree(id);
+    save();
+  }
+}
+
+function deleteTask(n: TaskNode, force = false) {
+  const t = active();
+  if (!t) return;
+  if (!force && n.children.length) {
+    const c = countNodes(n.children);
+    if (!confirm(`Delete “${n.text || 'task'}” and its ${c} subtask${c === 1 ? '' : 's'}?`)) return;
+  }
+  const loc = locate(t.tasks, n.id);
+  const focusId = loc ? (loc.list[loc.index - 1]?.id ?? loc.parent?.id ?? null) : null;
+  removeTask(t, n.id);
+  renderTree(focusId);
+  renderTopics();
+  save();
+}
+
 function renderTree(focusId?: string | null) {
   treeEl.innerHTML = '';
   const t = active();
   if (!t) return;
-
-  const addSibling = (after: TaskNode) => {
-    const loc = locate(t.tasks, after.id)!;
-    const node = newNode();
-    loc.list.splice(loc.index + 1, 0, node);
-    touch(t);
-    renderTree(node.id);
-    save();
-  };
-
-  const doIndent = (id: string) => {
-    if (indentTask(t, id)) {
-      renderTree(id);
-      save();
-      return;
-    }
-    const reason = indentBlockReason(t, id);
-    if (reason === 'sibling') setStatus('Needs a sibling above to nest under.');
-    else if (reason === 'height') setStatus(`Too deep — this would exceed ${MAX_DEPTH} levels.`);
-    else setStatus(`Max ${MAX_DEPTH} levels — can’t indent further.`);
-  };
-
-  const doOutdent = (id: string) => {
-    if (outdentTask(t, id)) {
-      renderTree(id);
-      save();
-    }
-  };
-
-  const deleteTask = (n: TaskNode, force = false) => {
-    if (!force && n.children.length) {
-      const c = countNodes(n.children);
-      if (!confirm(`Delete “${n.text || 'task'}” and its ${c} subtask${c === 1 ? '' : 's'}?`)) return;
-    }
-    const loc = locate(t.tasks, n.id);
-    const focusId = loc ? (loc.list[loc.index - 1]?.id ?? loc.parent?.id ?? null) : null;
-    removeTask(t, n.id);
-    renderTree(focusId);
-    renderTopics();
-    save();
-  };
 
   const build = (nodes: TaskNode[], depth: number) => {
     for (const n of nodes) {
@@ -421,8 +461,8 @@ function renderTree(focusId?: string | null) {
       if (n.children.length) {
         const b = document.createElement('button');
         b.className =
-          'flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[10px] text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700';
-        b.textContent = n.collapsed ? '▸' : '▾';
+          'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700';
+        b.appendChild(chevronSvg(n.collapsed));
         b.title = n.collapsed ? 'Expand subtasks' : 'Collapse subtasks';
         b.dataset.fold = n.id;
         b.addEventListener('click', (e) => {
@@ -436,7 +476,7 @@ function renderTree(focusId?: string | null) {
         fold = b;
       } else {
         const sp = document.createElement('span');
-        sp.className = 'h-4 w-4 shrink-0';
+        sp.className = 'h-6 w-6 shrink-0';
         fold = sp;
       }
 
@@ -459,16 +499,17 @@ function renderTree(focusId?: string | null) {
         save();
       });
 
-      // Wrapped, auto-growing text; clamped to 2 lines unless focused/pinned open.
+      // Wrapped, auto-growing text label (display-only span); clamped to 2 lines
+      // unless focused/pinned open/being edited in the ✎ popover.
       const textWrap = document.createElement('div');
       textWrap.className = 'min-w-[220px] flex-1';
-      const ta = document.createElement('textarea');
-      ta.rows = 1;
-      ta.className = textClass(n.done);
-      ta.value = n.text;
-      ta.placeholder = depth === 1 ? 'Task…' : 'Subtask…';
-      ta.readOnly = true; // click-safe: editing starts via the ✎ button or task creation
-      textWrap.appendChild(ta);
+      const label = document.createElement('span') as TaskLabel;
+      label.className = textClass(n.done);
+      label.textContent = n.text;
+      label.tabIndex = 0; // focusable: row click activates, Enter opens the ✎ editor
+      label.dataset.label = n.id;
+      label.dataset.placeholder = depth === 1 ? 'Task…' : 'Subtask…';
+      textWrap.appendChild(label);
 
       const expandBtn = document.createElement('button');
       expandBtn.className =
@@ -478,30 +519,26 @@ function renderTree(focusId?: string | null) {
 
       let open = expandedIds.has(n.id);
       const layoutText = () => {
-        ta.style.height = 'auto';
-        const full = ta.scrollHeight;
-        const overflowing = full > CLAMP_H + 1;
-        const clamped = !open && document.activeElement !== ta;
-        ta.style.height = `${clamped && overflowing ? CLAMP_H : full}px`;
+        // The span grows with its content; clamping is a max-height. scrollHeight
+        // still reports the full text height while clamped (overflow:hidden).
+        const overflowing = label.scrollHeight > CLAMP_H + 1;
+        const clamped = !open && document.activeElement !== label && editTargetId !== n.id;
+        const clamp = clamped && overflowing;
+        // border-box: add the label's vertical borders so 2 lines + padding fit.
+        const borderV = label.offsetHeight - label.clientHeight;
+        label.style.maxHeight = clamp ? `${CLAMP_H + borderV}px` : '';
+        label.style.overflow = clamp ? 'hidden' : '';
         expandBtn.style.display = overflowing ? '' : 'none';
         expandBtn.textContent = open ? '⤡' : '⤢';
       };
+      label.relayout = layoutText;
 
-      ta.addEventListener('input', () => {
-        n.text = ta.value;
-        touch(t);
-        layoutText();
-        save();
-      });
-      ta.addEventListener('focus', () => {
+      label.addEventListener('focus', () => {
         markActiveRow(n.id);
         layoutText();
-        snapTo(ta);
+        snapTo(label);
       });
-      ta.addEventListener('blur', () => {
-        ta.readOnly = true;
-        layoutText();
-      });
+      label.addEventListener('blur', () => layoutText());
       expandBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -510,20 +547,12 @@ function renderTree(focusId?: string | null) {
         else expandedIds.delete(n.id);
         layoutText();
       });
-      ta.addEventListener('keydown', (e) => {
-        if (ta.readOnly) return; // no accidental mutations from a stray focus
+      label.addEventListener('keydown', (e) => {
+        // The label never edits in place; Enter opens the ✎ popover (the ✎
+        // button is hover-revealed, so this keeps editing keyboard-reachable).
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          addSibling(n); // Shift+Enter inserts a newline instead
-        } else if (e.key === 'Tab') {
-          e.preventDefault();
-          if (e.shiftKey) doOutdent(n.id);
-          else doIndent(n.id);
-        } else if (e.key === 'Backspace' && ta.value === '') {
-          e.preventDefault();
-          // Empty leaf: delete outright. Empty parent: confirm first — force
-          // would silently drop its whole subtree.
-          deleteTask(n, n.children.length === 0);
+          openEditPop(n.id);
         }
       });
 
@@ -568,8 +597,8 @@ function renderTree(focusId?: string | null) {
         return b;
       };
       const editBtn = mkBtn('✎', 'Edit task', () => {
-        ta.readOnly = false;
-        ta.focus();
+        if (editTargetId === n.id && !editPop.classList.contains('hidden')) closeEditPop();
+        else openEditPop(n.id);
       });
       editBtn.dataset.edit = n.id;
       if (depth < MAX_DEPTH) {
@@ -578,6 +607,7 @@ function renderTree(focusId?: string | null) {
           if (node) {
             renderTree(node.id);
             save();
+            openEditPop(node.id);
           }
         });
       }
@@ -588,28 +618,29 @@ function renderTree(focusId?: string | null) {
       // Clicking anywhere on the row (except its buttons) focuses its text → activates it.
       row.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).closest('button')) return;
-        ta.focus();
+        label.focus();
       });
       row.append(fold, cb, textWrap, expandBtn, badge, ...(timerChip ? [timerChip] : []), actions);
       treeEl.appendChild(row);
-      layoutText(); // measure once the textarea is in the DOM
+      layoutText(); // measure once the label is in the DOM
       if (!n.collapsed) build(n.children, depth + 1);
     }
   };
   build(t.tasks, 1);
   updateBadges();
   if (focusId) {
-    const ta = treeEl.querySelector<HTMLTextAreaElement>(
-      `[data-id="${CSS.escape(focusId)}"] textarea`,
-    );
-    if (ta) {
-      // focusId only follows explicit actions (create/indent/outdent/delete),
-      // so the target starts editable; stray clicks never reach this path.
-      ta.readOnly = false;
-      ta.focus();
-      snapTo(ta);
+    const label = labelFor(focusId);
+    if (label) {
+      // focusId only follows explicit actions (create/indent/outdent/delete):
+      // focus the label for the active-row marker; creation flows then open
+      // the ✎ editor on the new node.
+      label.focus();
+      snapTo(label);
     }
   }
+  // Re-anchor the open editor to its (possibly rebuilt) row; close it if the
+  // row is gone (deleted, topic switched).
+  if (editTargetId !== null) positionEditPop();
 }
 
 function renderTopicView() {
@@ -641,12 +672,13 @@ function renderTopicView() {
     view.classList.remove('hidden');
     view.classList.add('flex');
   }
-  // Render AFTER the view is visible: textarea auto-height reads scrollHeight, which
+  // Render AFTER the view is visible: the label clamp reads scrollHeight, which
   // is 0 while display:none — measuring hidden would collapse every row to 0px.
   renderTree();
 }
 
 function selectTopic(id: string | null) {
+  closeEditPop();
   activeId = id;
   focusedTaskId = null;
   renderTopics();
@@ -688,6 +720,7 @@ document.getElementById('add-root')!.addEventListener('click', () => {
   if (node) {
     renderTree(node.id);
     save();
+    openEditPop(node.id);
   }
 });
 
@@ -698,6 +731,145 @@ fadeBtn.addEventListener('click', () => {
   if (!fadeOn) topicViewEl.classList.remove('fade-idle');
   setStatus(fadeOn ? 'Fade on — floating window dims when the pointer leaves' : 'Fade off');
 });
+
+// --- Task text editor (✎ popover) ---------------------------------------------------
+// The row text is a read-only label; editing happens in a small popover anchored
+// to the row. Commits are write-through (every keystroke saves), so closing the
+// window mid-edit loses nothing; Esc is the only path that reverts.
+function labelFor(id: string): TaskLabel | null {
+  return treeEl.querySelector<TaskLabel>(`[data-id="${CSS.escape(id)}"] [data-label]`);
+}
+
+function editNode(): { t: Topic; n: TaskNode } | null {
+  const t = active();
+  const loc = t && editTargetId !== null ? locate(t.tasks, editTargetId) : null;
+  return t && loc ? { t, n: loc.node } : null;
+}
+
+function autosizeEditText() {
+  editText.style.height = 'auto';
+  editText.style.height = `${Math.min(editText.scrollHeight, 240)}px`;
+}
+
+/** Anchor the popover below its row (above when there's no room), clamped to the
+ *  viewport of whichever document hosts it — the board or the PiP window. */
+function positionEditPop() {
+  if (editTargetId === null) return;
+  const row = treeEl.querySelector<HTMLElement>(`[data-id="${CSS.escape(editTargetId)}"]`);
+  if (!row) {
+    closeEditPop();
+    return;
+  }
+  const win = editPop.ownerDocument.defaultView;
+  if (!win) return;
+  if (editResizeWin !== win) {
+    editResizeWin?.removeEventListener('resize', positionEditPop);
+    editResizeWin = win;
+    win.addEventListener('resize', positionEditPop);
+  }
+  const r = row.getBoundingClientRect();
+  const left = Math.max(8, Math.min(r.left, win.innerWidth - editPop.offsetWidth - 8));
+  let top = r.bottom + 4;
+  if (top + editPop.offsetHeight > win.innerHeight - 8) top = Math.max(8, r.top - editPop.offsetHeight - 4);
+  editPop.style.left = `${left}px`;
+  editPop.style.top = `${top}px`;
+}
+
+function openEditPop(id: string) {
+  closeTimerPop(); // one popover at a time
+  const t = active();
+  const loc = t && locate(t.tasks, id);
+  if (!t || !loc) return;
+  editTargetId = id;
+  editOriginalText = loc.node.text;
+  markActiveRow(id);
+  editText.value = loc.node.text;
+  editPop.classList.remove('hidden');
+  autosizeEditText();
+  positionEditPop();
+  labelFor(id)?.relayout?.();
+  editText.focus();
+  editText.setSelectionRange(editText.value.length, editText.value.length);
+}
+
+function closeEditPop() {
+  const id = editTargetId;
+  editPop.classList.add('hidden');
+  editTargetId = null;
+  editResizeWin?.removeEventListener('resize', positionEditPop);
+  editResizeWin = null;
+  if (id) labelFor(id)?.relayout?.();
+}
+
+/** Esc: restore the text the popover opened with, then close. */
+function cancelEdit() {
+  const cur = editNode();
+  if (cur && cur.n.text !== editOriginalText) {
+    cur.n.text = editOriginalText;
+    touch(cur.t);
+    const label = labelFor(cur.n.id);
+    if (label) {
+      label.textContent = editOriginalText;
+      label.relayout?.();
+    }
+    save();
+  }
+  closeEditPop();
+}
+
+editText.addEventListener('input', () => {
+  const cur = editNode();
+  if (!cur) {
+    closeEditPop();
+    return;
+  }
+  cur.n.text = editText.value;
+  touch(cur.t);
+  const label = labelFor(cur.n.id);
+  if (label) {
+    label.textContent = cur.n.text;
+    label.relayout?.();
+  }
+  autosizeEditText();
+  positionEditPop();
+  save();
+});
+
+editText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault(); // Shift+Enter inserts a newline instead
+    closeEditPop();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    const cur = editNode();
+    if (!cur) return;
+    if (e.shiftKey) doOutdent(cur.n.id);
+    else doIndent(cur.n.id);
+    editText.focus(); // renderTree focused the row label; keep typing in the editor
+  }
+  // No Backspace-on-empty delete here: clearing text to retype must never
+  // destroy the task — deletion stays on the row's × button (with its confirm).
+});
+
+editDoneBtn.addEventListener('click', () => closeEditPop());
+
+// Escape / outside-click close, on both the document and the topic-view mount
+// (same PiP rationale as the timer popover). ✎ and add-task clicks are exempt:
+// they open the editor, and the same click must not immediately close it.
+const onEditEscape = (e: Event) => {
+  if ((e as KeyboardEvent).key === 'Escape' && !editPop.classList.contains('hidden')) cancelEdit();
+};
+const onEditOutside = (e: Event) => {
+  if (editPop.classList.contains('hidden')) return;
+  if ((e.target as HTMLElement).closest('#edit-pop, [data-edit], #add-root')) return;
+  closeEditPop();
+};
+for (const target of [document, topicViewEl]) {
+  target.addEventListener('keydown', onEditEscape);
+  target.addEventListener('click', onEditOutside);
+}
+// Keep the popover anchored while the tree scrolls under it.
+treeScrollEl.addEventListener('scroll', positionEditPop, { passive: true });
 
 // --- Countdown timer --------------------------------------------------------------
 // UI-only: which task the open popover targets.
@@ -718,6 +890,7 @@ function closeTimerPop() {
 }
 
 function openTimerPop(id: string) {
+  closeEditPop(); // one popover at a time
   const t = active();
   const loc = t && locate(t.tasks, id);
   if (!loc) return;
@@ -823,7 +996,7 @@ browser.storage?.onChanged.addListener((changes, areaName) => {
   }
   const ae = document.activeElement;
   const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
-  if (typing && (ae.closest('#tree') || ae.id === 'topic-title')) return; // mid-keystroke
+  if (typing && (ae.closest('#tree') || ae.closest('#edit-pop') || ae.id === 'topic-title')) return; // mid-keystroke
   topics = sanitizeTopics(next);
   lastSavedSnap = null; // stored value changed under us — the next save must write
   if (!active()) selectTopic(topics[0]?.id ?? null);
@@ -926,7 +1099,7 @@ void (async () => {
   topics = await loadTopics();
   selectTopic(topics[0]?.id ?? null);
   // One shared 1s tick: refreshes chip text/state in place — never renderTree()
-  // or save(), so textarea identity and focus survive while typing (also in PiP,
+  // or save(), so label identity and focus survive while typing (also in PiP,
   // where this board-window interval keeps running on the moved DOM).
   setInterval(() => {
     for (const chip of treeEl.querySelectorAll<HTMLElement>('[data-timer-id]')) {

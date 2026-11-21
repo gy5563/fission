@@ -18,23 +18,24 @@ keep the whole tree in a Picture-in-Picture window while you work.
 ## Features
 
 - **Topics** — rename, delete, progress at a glance (`4/9 done`)
-- **10-tier nesting** — `＋` adds a subtask; `→`/`←` buttons or `Tab` /
-  `Shift+Tab` indent/outdent. Depth *and* subtree height are enforced, so
-  nothing can exceed level 10
+- **10-tier nesting** — `＋` adds a subtask; `→`/`←` buttons (or `Tab` /
+  `Shift+Tab` inside the task editor) indent/outdent. Depth *and* subtree height
+  are enforced, so nothing can exceed level 10
 - **Cascade checking (down-only)** — checking or unchecking a parent applies to
   its whole subtree; checking a child affects only that child and never changes
   its parent. Each checkbox shows the task's own state (✓ done / empty), plus a
   live progress badge (`2/5` — green when all descendants are done, amber when
   partial)
 - **Wrapped, expandable text** — task text wraps and auto-grows; long tasks clamp
-  to two lines with a `⤢` toggle (and auto-expand while focused) so the full list
-  stays scannable. `Shift+Enter` inserts a newline
+  to two lines with a `⤢` toggle (and auto-expand while focused or being edited)
+  so the full list stays scannable. `Shift+Enter` inserts a newline in the editor
 - **Collapsible subtrees** — fold any parent (`▾`/`▸`) to hide its branch; the
   progress badge stays visible and the fold state is saved
 - **Deep-tree scrolling** — text keeps a readable minimum width, so wide trees
   scroll horizontally and the active row snaps into view
-- **Click-safe editing** — task text is read-only until you hit the row's `✎`
-  button (new tasks open ready to type), so stray clicks select a task but
+- **Click-safe editing** — task text is a read-only label; the row's `✎` button
+  (or `Enter` on a selected task) opens a small editor popover anchored to the
+  row, and new tasks open it ready to type. Stray clicks select a task but
   can't change it
 - **Active-row highlight** — the task you're working in gets a soft green tint + border
   ("you are here"); it follows focus and clicks, persists after you click away,
@@ -47,8 +48,9 @@ keep the whole tree in a Picture-in-Picture window while you work.
   window dims to ≈40% when your pointer leaves it — except the highlighted
   task, which stays fully visible. Moving back in restores everything, and the
   preference is saved
-- **Keyboard flow** — `Enter` adds the next sibling, `Backspace` on an empty
-  task deletes it, `Tab`/`Shift+Tab` re-nest
+- **Keyboard flow** — `Enter` on a selected task opens its editor; inside the
+  editor `Enter` is done, `Shift+Enter` a newline, `Tab`/`Shift+Tab` re-nest,
+  and `Esc` cancels the edit
 - **Full editing while floating** — the PiP window hosts the same live DOM
   (check, add, rename, re-nest); closing it docks the tree back into the board
 - **Export**

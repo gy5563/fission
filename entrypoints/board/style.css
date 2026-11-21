@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+/* Tailwind v4's preflight gives buttons cursor:default — restore the pointer
+   for every button (static markup and dynamically built rows/popovers alike). */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 /* Active task row: a persistent "you are here" marker — soft tint + green border.
    Every row carries a 1px transparent border (below), so activation changes
    border COLOR only and never shifts layout. */
@@ -15,19 +21,31 @@
   transition: opacity 120ms ease;
 }
 
+/* Empty task labels show a muted placeholder (new tasks open the ✎ editor
+   immediately, so this is mostly seen after cancelling a fresh empty task). */
+#tree [data-label]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-neutral-400);
+}
+
 /* Finished countdown: amber chip + soft row tint, kept until the timer is cancelled. */
 #tree [data-timer-id].timer-done {
   border-color: rgb(251 191 36);
   background-color: rgb(254 243 199);
   color: rgb(146 64 14);
 }
+/* Timed-up row: darker orange border wins over the active row's green (same
+   specificity, later in the file), so a finished countdown reads as urgent
+   even while the row stays focused. */
 #tree [data-id].row-timer-done {
+  border-color: #ea580c;
   background-color: rgb(254 243 199 / 0.5);
 }
 
-/* Fade-on-leave (PiP): dim everything except the active task row. Per-element
-   opacity — an ancestor fade would multiply into the exempt row. */
-#topic-view.fade-idle > :not(#tree-scroll),
+/* Fade-on-leave (PiP): dim everything except the active task row and the open
+   ✎ editor. Per-element opacity — an ancestor fade would multiply into the
+   exempt row. */
+#topic-view.fade-idle > :not(#tree-scroll):not(#edit-pop),
 #topic-view.fade-idle #add-root,
 #topic-view.fade-idle .row:not(.row-active) {
   opacity: 0.4;

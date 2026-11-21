@@ -1,1 +1,6 @@
 @import 'tailwindcss';
+
+/* Tailwind v4's preflight gives buttons cursor:default — restore the pointer. */
+button:not(:disabled) {
+  cursor: pointer;
+}
