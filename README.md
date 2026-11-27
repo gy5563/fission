@@ -1,3 +1,5 @@
+<img src="./public/icon/128.png" width="64" height="64" align="right" alt="Fission logo" />
+
 # Fission
 
 Fission is a Chrome extension for **nested
@@ -76,6 +78,7 @@ keep the whole tree in a Picture-in-Picture window while you work.
 | `entrypoints/background.ts` | Opens/focuses the single persistent board window |
 | `entrypoints/board/` | Topic sidebar + checklist tree + Document PiP host + exports |
 | `entrypoints/popup/` | Launcher (a popup can't host PiP — it unloads on focus loss) |
+| `public/icon/` | Extension logo (`fission-logo.svg`) and MV3 PNG icons (`16`, `32`, `48`, `96`, `128` px) |
 
 ## Install (load unpacked)
 

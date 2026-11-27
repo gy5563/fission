@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="linear-gradient-1" x1="24" y1="24" x2="488" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#27272a"/>
+      <stop offset="1" stop-color="#111113"/>
+    </linearGradient>
+    <filter id="filter-1" filterUnits="userSpaceOnUse" x="202" y="114" width="238" height="132" data-vc-blend="multiply" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="0" dy="8" result="shadow"/><feFlood flood-color="#000000" flood-opacity="0.35"/><feComposite in2="shadow" operator="in" result="paint"/><feMerge><feMergeNode in="paint"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="linear-gradient-2" x1="236" y1="148" x2="406" y2="212" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+  </defs>
+  <title>Fission Logo</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path id="Badge" d="M132 24 L380 24 C439.647 24 488 72.353 488 132 L488 380 C488 439.647 439.647 488 380 488 L132 488 C72.353 488 24 439.647 24 380 L24 132 C24 72.353 72.353 24 132 24 Z" fill="url(#linear-gradient-1)" stroke="#3f3f46" stroke-width="2" stroke-miterlimit="10"/>
+    <path id="Branch_Top" data-name="Branch Top" d="M154 256 C206 256 200 180 252 180" fill="none" stroke="#71717a" stroke-width="10" stroke-linecap="round" stroke-miterlimit="10"/>
+    <path id="Branch_Bottom" data-name="Branch Bottom" d="M154 256 C206 256 200 332 252 332" fill="none" stroke="#71717a" stroke-width="10" stroke-linecap="round" stroke-miterlimit="10"/>
+    <path id="Root_Node" data-name="Root Node" d="M126 224 L150 224 C161.046 224 170 232.954 170 244 L170 268 C170 279.046 161.046 288 150 288 L126 288 C114.954 288 106 279.046 106 268 L106 244 C106 232.954 114.954 224 126 224 Z" fill="#fafafa"/>
+    <g filter="url(#filter-1)">
+      <path id="Active_Floating_Node" data-name="Active Floating Node" d="M268 148 L374 148 C391.673 148 406 162.327 406 180 L406 180 C406 197.673 391.673 212 374 212 L268 212 C250.327 212 236 197.673 236 180 L236 180 C236 162.327 250.327 148 268 148 Z" fill="url(#linear-gradient-2)"/>
+    </g>
+    <path id="Secondary_Node" data-name="Secondary Node" d="M268 300 L336 300 C353.673 300 368 314.327 368 332 L368 332 C368 349.673 353.673 364 336 364 L268 364 C250.327 364 236 349.673 236 332 L236 332 C236 314.327 250.327 300 268 300 Z" fill="#d4d4d8"/>
+  </g>
+</svg>
