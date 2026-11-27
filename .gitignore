@@ -2,4 +2,5 @@ node_modules
 .output
 .wxt
 .dev-profile
+.hermes
 .DS_Store

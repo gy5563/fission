@@ -962,25 +962,37 @@ for (const target of [document, document.getElementById('topic-view')!]) {
 }
 
 // --- Export ---------------------------------------------------------------------
-document.getElementById('export-pdf')!.addEventListener('click', async () => {
+const exportPdfBtn = document.getElementById('export-pdf') as HTMLButtonElement;
+const exportMdBtn = document.getElementById('export-md') as HTMLButtonElement;
+exportPdfBtn.addEventListener('click', async () => {
   const t = active();
-  if (!t) return;
+  if (!t || exportPdfBtn.disabled) return;
   if (countNodes(t.tasks) === 0) { setStatus('Add some tasks first'); return; }
+  exportPdfBtn.disabled = true;
+  exportPdfBtn.textContent = '…';
   try {
     // Lazy-load jsPDF so the board's initial bundle stays small.
     const { exportTopicPdf } = await import('../../utils/pdf');
-    await exportTopicPdf(t);
+    await exportTopicPdf(t, exportPdfBtn.ownerDocument);
     setStatus('PDF exported ✓');
   } catch (err) {
     setStatus(`PDF failed: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    exportPdfBtn.disabled = false;
+    exportPdfBtn.textContent = '↓ PDF';
   }
 });
-document.getElementById('export-md')!.addEventListener('click', () => {
+exportMdBtn.addEventListener('click', () => {
   const t = active();
   if (!t) return;
   if (countNodes(t.tasks) === 0) { setStatus('Add some tasks first'); return; }
   const date = new Date().toISOString().slice(0, 10);
-  downloadText(`fission-${slugify(t.title)}-${date}.md`, toMarkdown(t), 'text/markdown');
+  downloadText(
+    `fission-${slugify(t.title)}-${date}.md`,
+    toMarkdown(t),
+    'text/markdown',
+    exportMdBtn.ownerDocument,
+  );
   setStatus('Markdown exported ✓');
 });
 
@@ -1045,7 +1057,7 @@ async function floatIntoPip() {
     const win = await dpi.requestWindow({ width: 440, height: 600, copyStyleSheets: true });
     pipWin = win;
     win.document.title = `Fission — ${t.title}`;
-    mirrorStyles(win.document);
+    if (win.document.styleSheets.length === 0) mirrorStyles(win.document);
     win.document.body.className = 'm-0 flex h-screen flex-col bg-neutral-50 font-sans text-neutral-800';
     // Move the SAME topic view (header + tree) into the PiP window — live DOM,
     // so every edit/check/add works while floating, and docking restores it.

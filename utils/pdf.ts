@@ -63,8 +63,8 @@ const cleanUnicode = (s: string) =>
 // CJK (OFL-1.1, bundled under public/fonts; Latin + CJK + symbols) instead.
 // Fetched lazily and cached across exports, so Latin-only topics never pay the
 // ~13 MB cost.
-const CJK_FONT = 'NotoSansCJK';
-const CJK_FONT_FILE = 'NotoSansCJK-Regular.ttf';
+const CJK_FONT = 'FissionCJK';
+const CJK_FONT_FILE = 'FissionCJK-Regular.ttf';
 let cjkFontB64: string | null = null;
 async function loadCjkFontB64(): Promise<string> {
   if (cjkFontB64 !== null) return cjkFontB64;
@@ -97,7 +97,7 @@ const AMBER: RGB = [217, 119, 6];
 const GRAY: RGB = [163, 163, 163];
 const INK: RGB = [23, 23, 23];
 
-export async function exportTopicPdf(topic: Topic): Promise<void> {
+export async function exportTopicPdf(topic: Topic, targetDoc: Document = document): Promise<void> {
   const cjk = hasNonWinAnsi(topicText(topic));
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4', compress: true });
   const font = cjk ? CJK_FONT : 'helvetica';
@@ -258,5 +258,5 @@ export async function exportTopicPdf(topic: Topic): Promise<void> {
   }
 
   const date = new Date().toISOString().slice(0, 10);
-  downloadBlob(`fission-${slugify(topic.title)}-${date}.pdf`, doc.output('blob'));
+  downloadBlob(`fission-${slugify(topic.title)}-${date}.pdf`, doc.output('blob'), targetDoc);
 }

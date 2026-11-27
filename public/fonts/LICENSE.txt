@@ -1,5 +1,5 @@
-NotoSansCJK-Regular.ttf
-Merged from Noto Sans SC and Noto Sans KR (Hangul subset), weight 400,
+FissionCJK-Regular.ttf
+Modified subset/merge derived from Noto Sans SC and Noto Sans KR (Hangul subset), weight 400,
 instantiated from the variable fonts and merged with fontTools.
 Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font
 Name "Source". Noto is a trademark of Google Inc.

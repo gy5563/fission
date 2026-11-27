@@ -26,11 +26,19 @@ export default defineBackground(() => {
     // (Without externally_connectable, web pages can't message us anyway.)
     if (sender.id !== browser.runtime.id) return;
     if (msg?.type === 'open-board-window') {
-      void openBoardWindow().then((windowId) => sendResponse({ ok: true, windowId }));
+      void openBoardWindow()
+        .then((windowId) => sendResponse({ ok: true, windowId }))
+        .catch((err) =>
+          sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+        );
       return true; // keep the message channel open for the async reply
     }
   });
 
-  // One-time cleanup of the pre-Fission notes model (replaced by topics).
-  void browser.storage?.local.remove(['notes', 'pipNote']);
+  // One-time cleanup of the pre-Fission notes model on extension update.
+  browser.runtime.onInstalled.addListener((details) => {
+    if (details.reason === 'update') {
+      void browser.storage?.local.remove(['notes', 'pipNote']);
+    }
+  });
 });

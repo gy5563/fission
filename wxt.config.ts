@@ -47,12 +47,50 @@ function devChromium(): string | undefined {
 }
 const CHROMIUM = devChromium();
 
+const JSPDF_UNUSED_STUB = '\0jspdf-unused-stub';
+const JSPDF_UNUSED_DEPS = new Set(['html2canvas', 'canvg', 'dompurify']);
+
+// Chrome Web Store MV3 rejects remotely hosted code (Blue Sapphire). jsPDF
+// bundles (a) optional dynamic imports for doc.html()/SVG (html2canvas, canvg,
+// dompurify — ~379 KB, including core-js's `Function('return this')()`), and
+// (b) an unused `pdfobjectnewwindow` output mode that injects a cdnjs <script>.
+// Fission only uses vector primitives + `output('blob')`, so stub the unused
+// deps and strip the cdnjs script-injection branch at build time.
+function sanitizeJspdfForCws() {
+  const pdfObjectBranch =
+    /case\s*['"`]pdfobjectnewwindow['"`]\s*:[\s\S]*?throw\s+(?:new\s+)?Error\(['"`]The option pdfobjectnewwindow just works in a browser-environment\.['"`]\);/;
+  return {
+    name: 'sanitize-jspdf-for-cws',
+    enforce: 'pre' as const,
+    resolveId(id: string) {
+      if (JSPDF_UNUSED_DEPS.has(id)) return JSPDF_UNUSED_STUB;
+      return null;
+    },
+    load(id: string) {
+      if (id === JSPDF_UNUSED_STUB) return 'export default undefined;';
+      return null;
+    },
+    transform(code: string, id: string) {
+      if (!id.includes('jspdf') || !code.includes('pdfobjectnewwindow')) return null;
+      const next = code.replace(
+        pdfObjectBranch,
+        'case "pdfobjectnewwindow": throw new Error("pdfobjectnewwindow is disabled in MV3.");',
+      );
+      if (next.includes('cdnjs.cloudflare.com') || next.includes('pdfobject.min.js')) {
+        throw new Error(`sanitize-jspdf-for-cws failed to strip remote PDFObject URL in ${id}`);
+      }
+      return { code: next, map: null };
+    },
+  };
+}
+
 // See https://wxt.dev/api/reference/wxt/interfaces/inlineconfig.html
 export default defineConfig({
   manifest: {
     name: 'Fission',
     description:
       'Nested to-do lists that float on top — break tasks down 10 levels, check them off, export the tree as PDF or Markdown.',
+    minimum_chrome_version: '116',
     permissions: ['storage'],
   },
   // Persistent dev profile: web-ext otherwise runs Chrome in a throwaway temp
@@ -63,6 +101,6 @@ export default defineConfig({
     ...(CHROMIUM ? { binaries: { chrome: CHROMIUM } } : {}),
   },
   vite: () => ({
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), sanitizeJspdfForCws()],
   }),
 });
